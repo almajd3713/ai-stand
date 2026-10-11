@@ -1,0 +1,288 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Human or Bot?</title>
+<style>
+  :root {
+    --bg: #0b0a10;
+    --panel: #14121c;
+    --panel-2: #1c1927;
+    --line: #2a2638;
+    --text: #efedf5;
+    --muted: #938ea7;
+    --a: #8ab4ff;
+    --b: #ff9ad5;
+    --good: #7cf29c;
+    --bad: #ff6b6b;
+    --font: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    --mono: ui-monospace, "Cascadia Code", Consolas, monospace;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text); font-family: var(--font); }
+  body { overflow: hidden; }
+  button, input { font: inherit; }
+  button { cursor: pointer; }
+  .screen { position: fixed; inset: 0; display: none; }
+  .screen.on { display: grid; }
+  .eyebrow { font-size: 12px; letter-spacing: .16em; text-transform: uppercase; color: var(--muted); margin: 0 0 10px; }
+  .btn { background: var(--panel-2); color: var(--text); border: 1px solid var(--line); border-radius: 12px; padding: 12px 20px; }
+  .btn:hover:not(:disabled) { border-color: var(--muted); }
+  .btn:disabled { opacity: .35; cursor: default; }
+  .btn.go { background: var(--text); color: var(--bg); border-color: var(--text); font-weight: 700; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 20px; }
+
+  /* ---------- start ---------- */
+  #start { place-items: center; padding: 6vh 6vw; text-align: center; }
+  #start h1 { font-size: clamp(48px, 9vw, 120px); line-height: .9; letter-spacing: -.05em; margin: 0 0 22px; }
+  #start h1 .h { color: var(--a); } #start h1 .b { color: var(--b); }
+  .pitch { font-size: clamp(17px, 1.7vw, 23px); color: #cdc9d9; line-height: 1.5; max-width: 32em; margin: 0 auto 32px; }
+  #startBtn { font-size: 22px; padding: 16px 40px; }
+  #startNote { color: var(--muted); margin-top: 16px; min-height: 1.4em; }
+  .scoreline { margin-top: 44px; display: inline-flex; gap: 36px; color: var(--muted); }
+  .scoreline b { display: block; font-size: 38px; color: var(--text); font-variant-numeric: tabular-nums; }
+
+  /* ---------- round ---------- */
+  #round { grid-template-rows: auto minmax(0, 1fr); gap: 16px; padding: 16px; }
+  .bar { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 10px 18px; }
+  .bar h2 { margin: 0; font-size: 20px; }
+  .bar .hint { color: var(--muted); font-size: 14px; }
+  #timer { font-family: var(--mono); font-size: 26px; font-variant-numeric: tabular-nums; }
+  #timer.low { color: var(--bad); }
+  .vote { display: flex; gap: 10px; }
+  .vote .btn { font-weight: 700; }
+  .vote .va { color: var(--a); border-color: color-mix(in srgb, var(--a) 50%, transparent); }
+  .vote .vb { color: var(--b); border-color: color-mix(in srgb, var(--b) 50%, transparent); }
+  .panes { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; min-height: 0; }
+  .pane { display: flex; flex-direction: column; padding: 0; overflow: hidden; min-height: 0; }
+  .pane header { padding: 14px 18px; border-bottom: 1px solid var(--line); display: flex; align-items: center; gap: 12px; }
+  .dot { width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; font-weight: 800; color: var(--bg); }
+  .pane.A .dot { background: var(--a); } .pane.B .dot { background: var(--b); }
+  .pane header b { font-size: 18px; }
+  .log { flex: 1; overflow-y: auto; padding: 18px; display: flex; flex-direction: column; gap: 10px; }
+  .msg { max-width: 80%; padding: 10px 14px; border-radius: 16px; line-height: 1.45; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 16px; }
+  .msg.me { align-self: flex-end; background: #2c2a40; border-bottom-right-radius: 5px; }
+  .msg.them { align-self: flex-start; background: var(--panel-2); border: 1px solid var(--line); border-bottom-left-radius: 5px; }
+  .typing { color: var(--muted); font-size: 14px; padding: 0 18px 8px; min-height: 26px; }
+  .typing i { display: inline-block; width: 6px; height: 6px; margin: 0 2px; border-radius: 50%; background: var(--muted); animation: blink 1.2s infinite; }
+  .typing i:nth-child(2) { animation-delay: .2s; } .typing i:nth-child(3) { animation-delay: .4s; }
+  @keyframes blink { 0%, 80%, 100% { opacity: .25 } 40% { opacity: 1 } }
+  .pane form { display: flex; gap: 8px; padding: 12px; border-top: 1px solid var(--line); }
+  .pane input { flex: 1; background: var(--bg); color: var(--text); border: 1px solid var(--line); border-radius: 10px; padding: 11px 13px; font-size: 16px; }
+  .pane.A input:focus { outline: 2px solid var(--a); outline-offset: -1px; }
+  .pane.B input:focus { outline: 2px solid var(--b); outline-offset: -1px; }
+
+  /* ---------- reveal ---------- */
+  #reveal { place-items: center; padding: 4vh 4vw; overflow-y: auto; }
+  .reveal { max-width: 860px; width: 100%; text-align: center; }
+  .verdict { font-size: clamp(40px, 6vw, 76px); font-weight: 800; letter-spacing: -.04em; margin: 0 0 6px; }
+  .verdict.good { color: var(--good); } .verdict.bad { color: var(--bad); }
+  #rSub { font-size: 22px; color: #cdc9d9; margin: 0 0 28px; }
+  .reveal .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; text-align: left; margin-bottom: 26px; }
+  .reveal p { line-height: 1.55; margin: 0; color: #d6d3e0; }
+  .reveal ul { margin: 0; padding-left: 18px; line-height: 1.6; color: #d6d3e0; }
+  details summary { cursor: pointer; color: var(--muted); margin-top: 12px; font-size: 14px; }
+  details pre { white-space: pre-wrap; font-family: var(--mono); font-size: 12.5px; line-height: 1.5; color: #bdb8cc; background: var(--bg); border-radius: 10px; padding: 12px; margin: 10px 0 0; }
+
+  .toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); background: var(--panel-2); border: 1px solid var(--line); padding: 12px 18px; border-radius: 12px; display: none; }
+  .toast.on { display: block; }
+
+  @media (max-width: 900px) {
+    body { overflow: auto; }
+    .screen.on { position: static; min-height: 100vh; }
+    .panes { grid-template-columns: 1fr; }
+    .pane { height: 60vh; }
+    .bar { flex-wrap: wrap; }
+    .reveal .grid { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<section id="start" class="screen on">
+  <div>
+    <h1><span class="h">Human</span> or <span class="b">Bot?</span></h1>
+    <p class="pitch">You'll chat with two strangers at the same time. One is a real person, somewhere in this room. The other is an AI pretending to be a student. You have three minutes to work out which is which.</p>
+    <button class="btn go" id="startBtn">Start chatting</button>
+    <p id="startNote"></p>
+    <div class="scoreline">
+      <div><b id="sRounds">0</b>rounds played</div>
+      <div><b id="sFooled">–</b>of visitors fooled by the AI</div>
+    </div>
+  </div>
+</section>
+
+<section id="round" class="screen">
+  <div class="card bar">
+    <div><h2>Which one is the human?</h2><span class="hint">Chat with both. Ask anything.</span></div>
+    <span id="timer">3:00</span>
+    <div class="vote">
+      <button class="btn va" data-pick="A" disabled>A is the human</button>
+      <button class="btn vb" data-pick="B" disabled>B is the human</button>
+    </div>
+  </div>
+  <div class="panes">
+    <div class="card pane A">
+      <header><span class="dot">A</span><b>Stranger A</b></header>
+      <div class="log"></div>
+      <div class="typing"></div>
+      <form><input maxlength="300" placeholder="Message Stranger A…" autocomplete="off"><button class="btn go">Send</button></form>
+    </div>
+    <div class="card pane B">
+      <header><span class="dot">B</span><b>Stranger B</b></header>
+      <div class="log"></div>
+      <div class="typing"></div>
+      <form><input maxlength="300" placeholder="Message Stranger B…" autocomplete="off"><button class="btn go">Send</button></form>
+    </div>
+  </div>
+</section>
+
+<section id="reveal" class="screen">
+  <div class="reveal">
+    <p class="verdict" id="rVerdict"></p>
+    <p id="rSub"></p>
+    <div class="grid">
+      <div class="card">
+        <p class="eyebrow">Who the AI was playing</p>
+        <p id="rPersona"></p>
+        <details><summary>Show the AI's actual instructions</summary><pre id="rPrompt"></pre></details>
+      </div>
+      <div class="card">
+        <p class="eyebrow">What usually gives a bot away</p>
+        <ul>
+          <li>Knowing too much, too fast: trivia, maths, every language</li>
+          <li>Never getting a joke wrong, never being in a bad mood</li>
+          <li>Not knowing what's happening around it right now</li>
+          <li>Forgetting what it said three messages ago</li>
+          <li>Answering instantly or at a perfectly steady pace</li>
+        </ul>
+      </div>
+    </div>
+    <button class="btn go" id="again">Next player</button>
+  </div>
+</section>
+
+<div class="toast" id="toast"></div>
+
+<script type="module">
+const $ = (s, el = document) => el.querySelector(s);
+const MIN_MESSAGES = 3;   // messages the visitor must send before voting
+
+let ws, sent = 0, deadline = 0, tick, state = {};
+
+function show(id) { document.querySelectorAll(".screen").forEach((s) => s.classList.toggle("on", s.id === id)); }
+function toast(text) { const t = $("#toast"); t.textContent = text; t.classList.add("on"); setTimeout(() => t.classList.remove("on"), 3500); }
+function pane(who) { return $(`.pane.${who}`); }
+
+function connect() {
+  ws = new WebSocket(`${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/ws/judge`);
+  ws.onmessage = (e) => handle(JSON.parse(e.data));
+  ws.onclose = () => { $("#startNote").textContent = "Lost the server, reconnecting…"; setTimeout(connect, 1500); };
+}
+const tell = (msg) => ws.readyState === 1 && ws.send(JSON.stringify(msg));
+
+function handle(m) {
+  if (m.type === "status") {
+    state = m;
+    const s = m.stats;
+    $("#sRounds").textContent = s.rounds;
+    $("#sFooled").textContent = s.rounds ? `${Math.round(100 * (s.rounds - s.correct) / s.rounds)}%` : "–";
+    $("#startBtn").disabled = !m.human || !m.llm;
+    $("#startNote").textContent = !m.llm ? "The AI server isn't answering. Ask a club member."
+      : !m.human ? "Waiting for the human player to get ready…" : "";
+  } else if (m.type === "round") {
+    begin(m.seconds);
+  } else if (m.type === "msg") {
+    add(m.who, "them", m.text);
+  } else if (m.type === "typing") {
+    $(".typing", pane(m.who)).innerHTML = m.on ? `Stranger ${m.who} is typing <i></i><i></i><i></i>` : "";
+  } else if (m.type === "reveal") {
+    reveal(m);
+  } else if (m.type === "error") {
+    toast(m.text);
+  }
+}
+
+function begin(seconds) {
+  sent = 0;
+  for (const who of "AB") {
+    $(".log", pane(who)).innerHTML = "";
+    $(".typing", pane(who)).innerHTML = "";
+    $("input", pane(who)).value = "";
+  }
+  document.querySelectorAll(".vote .btn").forEach((b) => (b.disabled = true));
+  deadline = Date.now() + seconds * 1000;
+  clearInterval(tick);
+  tick = setInterval(countdown, 250);
+  countdown();
+  show("round");
+  $("input", pane("A")).focus();
+}
+
+function countdown() {
+  const left = Math.max(0, Math.round((deadline - Date.now()) / 1000));
+  $("#timer").textContent = `${Math.floor(left / 60)}:${String(left % 60).padStart(2, "0")}`;
+  $("#timer").classList.toggle("low", left <= 20);
+  if (left === 0) {
+    clearInterval(tick);
+    document.querySelectorAll(".vote .btn").forEach((b) => (b.disabled = false));
+    for (const who of "AB") $("input", pane(who)).disabled = true;
+    toast("Time's up! Who was the human?");
+  }
+}
+
+function add(who, kind, text) {
+  const log = $(".log", pane(who));
+  const div = document.createElement("div");
+  div.className = `msg ${kind}`;
+  div.textContent = text;
+  log.append(div);
+  log.scrollTop = log.scrollHeight;
+}
+
+for (const who of "AB") {
+  const form = $("form", pane(who)), input = $("input", pane(who));
+  let typingOn = false, typingTimer;
+  form.onsubmit = (e) => {
+    e.preventDefault();
+    const text = input.value.trim();
+    if (!text) return;
+    add(who, "me", text);
+    tell({ type: "say", to: who, text });
+    tell({ type: "typing", to: who, on: false }); typingOn = false;
+    input.value = "";
+    if (++sent >= MIN_MESSAGES) document.querySelectorAll(".vote .btn").forEach((b) => (b.disabled = false));
+  };
+  input.addEventListener("input", () => {   // the human player sees you typing, like a real chat
+    if (!typingOn) { typingOn = true; tell({ type: "typing", to: who, on: true }); }
+    clearTimeout(typingTimer);
+    typingTimer = setTimeout(() => { typingOn = false; tell({ type: "typing", to: who, on: false }); }, 2500);
+  });
+  input.addEventListener("keydown", (e) => {   // Tab jumps between the two chats
+    if (e.key === "Tab") { e.preventDefault(); $("input", pane(who === "A" ? "B" : "A")).focus(); }
+  });
+}
+
+document.querySelectorAll(".vote .btn").forEach((b) => (b.onclick = () => tell({ type: "vote", pick: b.dataset.pick })));
+
+function reveal(m) {
+  clearInterval(tick);
+  for (const who of "AB") $("input", pane(who)).disabled = false;
+  const v = $("#rVerdict");
+  if (m.correct === null) { v.textContent = "Round ended"; v.className = "verdict"; }
+  else { v.textContent = m.correct ? "You got it!" : "The AI fooled you!"; v.className = `verdict ${m.correct ? "good" : "bad"}`; }
+  $("#rSub").textContent = `Stranger ${m.human} was the human. Stranger ${m.bot} was the AI.`;
+  const p = m.persona;
+  $("#rPersona").textContent = `“${p.name}”, ${p.age}, a ${p.study} student who likes ${p.likes}. None of it is real: it's a language model running on a laptop at this stand, following the instructions below.`;
+  $("#rPrompt").textContent = m.prompt;
+  show("reveal");
+  $("#again").focus();
+}
+
+$("#startBtn").onclick = () => tell({ type: "start" });
+$("#again").onclick = () => show("start");
+connect();
+</script>
+</body>
+</html>

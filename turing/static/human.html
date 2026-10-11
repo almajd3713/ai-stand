@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Human or Bot: human player</title>
+<style>
+  :root {
+    --bg: #0b0a10; --panel: #14121c; --panel-2: #1c1927; --line: #2a2638;
+    --text: #efedf5; --muted: #938ea7; --a: #8ab4ff; --b: #ff9ad5; --good: #7cf29c; --bad: #ff6b6b;
+    --font: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text); font-family: var(--font); }
+  body { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 16px; padding: 16px; height: 100vh; }
+  button, input { font: inherit; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 18px; }
+  .eyebrow { font-size: 12px; letter-spacing: .16em; text-transform: uppercase; color: var(--muted); margin: 0 0 8px; }
+  .chat { display: flex; flex-direction: column; padding: 0; overflow: hidden; min-height: 0; }
+  .chat header { padding: 16px 18px; border-bottom: 1px solid var(--line); font-size: 18px; }
+  #side { font-weight: 800; }
+  #log { flex: 1; overflow-y: auto; padding: 18px; display: flex; flex-direction: column; gap: 10px; }
+  .msg { max-width: 80%; padding: 10px 14px; border-radius: 16px; line-height: 1.45; white-space: pre-wrap; overflow-wrap: anywhere; }
+  .msg.me { align-self: flex-end; background: #2c2a40; border-bottom-right-radius: 5px; }
+  .msg.them { align-self: flex-start; background: var(--panel-2); border: 1px solid var(--line); border-bottom-left-radius: 5px; }
+  .msg.sys { align-self: center; color: var(--muted); font-size: 14px; }
+  .typing { color: var(--muted); font-size: 14px; padding: 0 18px 8px; min-height: 26px; }
+  form { display: flex; gap: 8px; padding: 12px; border-top: 1px solid var(--line); }
+  input { flex: 1; background: var(--bg); color: var(--text); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; font-size: 17px; }
+  input:focus { outline: 2px solid var(--text); outline-offset: -1px; }
+  button { background: var(--text); color: var(--bg); border: 0; border-radius: 10px; padding: 0 20px; font-weight: 700; cursor: pointer; }
+  button:disabled { opacity: .35; }
+  aside { display: flex; flex-direction: column; gap: 16px; }
+  #state { font-size: 20px; font-weight: 700; margin: 0; }
+  ul { margin: 0; padding-left: 18px; line-height: 1.6; color: #d6d3e0; font-size: 15px; }
+  #result { font-size: 15px; line-height: 1.5; color: #d6d3e0; margin: 0; }
+  @media (max-width: 800px) { body { grid-template-columns: 1fr; height: auto; } .chat { height: 70vh; } }
+</style>
+</head>
+<body>
+  <div class="card chat">
+    <header>You are <span id="side">nobody yet</span></header>
+    <div id="log"><div class="msg sys">Waiting for a visitor to start a round…</div></div>
+    <div class="typing" id="typing"></div>
+    <form id="say"><input id="text" maxlength="300" placeholder="Type like yourself…" autocomplete="off" disabled><button id="send" disabled>Send</button></form>
+  </div>
+  <aside>
+    <div class="card"><p class="eyebrow">Status</p><p id="state">Connecting…</p></div>
+    <div class="card"><p class="eyebrow">Last round</p><p id="result">No rounds yet.</p></div>
+    <div class="card">
+      <p class="eyebrow">How to play the human</p>
+      <ul>
+        <li>Just be yourself. The bot is pretending to be a student too.</li>
+        <li>Mention things only someone in the room would know: the noise, the weather, the stand next door.</li>
+        <li>Don't try to sound robotic to trick them. That's not the game.</li>
+        <li>Keep the screen out of the visitor's sight!</li>
+      </ul>
+    </div>
+  </aside>
+
+<script type="module">
+const $ = (s) => document.querySelector(s);
+let ws, side = null, typingOn = false, typingTimer;
+
+function connect() {
+  ws = new WebSocket(`${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/ws/human`);
+  ws.onopen = () => { $("#state").textContent = "Ready. Waiting for a visitor."; };
+  ws.onmessage = (e) => handle(JSON.parse(e.data));
+  ws.onclose = () => { $("#state").textContent = "Disconnected, retrying…"; setTimeout(connect, 1500); };
+}
+const tell = (m) => ws.readyState === 1 && ws.send(JSON.stringify(m));
+
+function add(kind, text) {
+  const d = document.createElement("div");
+  d.className = `msg ${kind}`; d.textContent = text;
+  $("#log").append(d); $("#log").scrollTop = $("#log").scrollHeight;
+}
+
+function playing(on) {
+  $("#text").disabled = $("#send").disabled = !on;
+  if (on) $("#text").focus();
+}
+
+function handle(m) {
+  if (m.type === "round") {
+    side = m.side;
+    $("#side").textContent = `Stranger ${side}`;
+    $("#side").style.color = side === "A" ? "var(--a)" : "var(--b)";
+    $("#log").innerHTML = "";
+    add("sys", `New round. The visitor sees you as Stranger ${side}. Wait for them to say something, or say hi.`);
+    $("#state").textContent = "Round in progress";
+    playing(true);
+  } else if (m.type === "msg") {
+    add("them", m.text);
+  } else if (m.type === "typing") {
+    $("#typing").textContent = m.on ? "The visitor is typing…" : "";
+  } else if (m.type === "reveal") {
+    playing(false);
+    $("#typing").textContent = "";
+    add("sys", "Round over.");
+    $("#result").textContent = m.correct === null ? "The round ended without a vote."
+      : m.correct ? "The visitor correctly picked you as the human." : "The visitor thought the AI was the human!";
+    $("#state").textContent = "Ready. Waiting for a visitor.";
+    $("#side").textContent = "nobody yet"; $("#side").style.color = "";
+  } else if (m.type === "status" && !m.playing) {
+    playing(false);
+  }
+}
+
+$("#say").onsubmit = (e) => {
+  e.preventDefault();
+  const text = $("#text").value.trim();
+  if (!text) return;
+  add("me", text);
+  tell({ type: "say", text });
+  $("#text").value = ""; typingOn = false;
+};
+$("#text").addEventListener("input", () => {
+  if (!typingOn) { typingOn = true; tell({ type: "typing", on: true }); }
+  clearTimeout(typingTimer);
+  typingTimer = setTimeout(() => { typingOn = false; tell({ type: "typing", on: false }); }, 2500);
+});
+connect();
+</script>
+</body>
+</html>
