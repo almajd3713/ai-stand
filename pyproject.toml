@@ -13,6 +13,7 @@ dependencies = [
     "uvicorn[standard]>=0.30",
     "pillow>=11",
     "numpy>=2",
+    "ultralytics>=8.4.175",
 ]
 
 [tool.uv]

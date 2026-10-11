@@ -1,0 +1,239 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Invisibility Cloak</title>
+<style>
+  :root {
+    --bg: #090a0d;
+    --panel: #121419;
+    --panel-2: #1a1d24;
+    --line: #262a33;
+    --text: #edeef2;
+    --muted: #8d93a1;
+    --seen: #ff4d5e;
+    --hidden: #5ce1e6;
+    --font: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    --mono: ui-monospace, "Cascadia Code", Consolas, monospace;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text); font-family: var(--font); overflow: hidden; }
+  button { font: inherit; cursor: pointer; }
+  #app { height: 100vh; display: grid; grid-template-columns: minmax(0, 1fr) clamp(300px, 26vw, 420px); gap: 2vh; padding: 2vh; }
+  .eyebrow { font-size: 1.25vh; letter-spacing: .18em; text-transform: uppercase; color: var(--muted); margin: 0 0 1vh; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 2vh; }
+
+  #stage { position: relative; display: grid; place-items: center; min-height: 0; }
+  #view { max-width: 100%; max-height: 100%; border-radius: 14px; background: #000; box-shadow: 0 0 0 1px var(--line); }
+  #wait { position: absolute; color: var(--muted); font-size: 2.2vh; }
+
+  aside { display: flex; flex-direction: column; gap: 2vh; min-height: 0; overflow-y: auto; }
+  #verdict { font-size: 6.4vh; font-weight: 900; letter-spacing: -.03em; line-height: 1; margin: 0; transition: color .2s; }
+  #verdict.seen { color: var(--seen); }
+  #verdict.hidden { color: var(--hidden); }
+  #verdictSub { color: var(--muted); margin: 1vh 0 0; font-size: 1.7vh; }
+  .meter { position: relative; height: 1.6vh; background: var(--panel-2); border-radius: 99px; overflow: hidden; margin: 1.6vh 0 .6vh; }
+  .meter i { position: absolute; inset: 0 auto 0 0; width: 0; background: var(--seen); border-radius: 99px; transition: width .15s; }
+  .meter b { position: absolute; top: 0; bottom: 0; width: 2px; background: var(--text); }
+  .legend { display: flex; justify-content: space-between; font-size: 1.3vh; color: var(--muted); font-family: var(--mono); }
+
+  .modes { display: grid; gap: .8vh; }
+  .mode { text-align: left; background: var(--panel-2); color: var(--muted); border: 1px solid var(--line); border-radius: 10px; padding: 1.1vh 1.3vh; font-size: 1.6vh; display: grid; grid-template-columns: auto 1fr; gap: .2vh 1vh; }
+  .mode b { color: var(--text); }
+  .mode kbd { font-family: var(--mono); grid-row: span 2; color: var(--muted); }
+  .mode[aria-pressed="true"] { border-color: var(--hidden); background: rgba(92, 225, 230, .08); }
+  .patches { display: grid; grid-template-columns: 1fr 1fr; gap: 1vh; }
+  .patches figure { margin: 0; }
+  .patches img { width: 100%; aspect-ratio: 1; border-radius: 8px; display: block; image-rendering: auto; background: var(--panel-2); }
+  .patches figcaption { font-size: 1.3vh; color: var(--muted); margin-top: .5vh; text-align: center; }
+  .how { margin: 0; padding-left: 2.2vh; font-size: 1.55vh; line-height: 1.45; color: #c8cbd4; display: grid; gap: .8vh; }
+  .how b { color: var(--text); }
+  #keys { font-size: 1.2vh; color: #4f5563; }
+
+  @media (max-aspect-ratio: 4/3) {
+    html, body { overflow: auto; }
+    #app { grid-template-columns: 1fr; height: auto; padding: 16px; gap: 16px; }
+    .eyebrow, .mode, .how, .legend, #verdictSub, .patches figcaption { font-size: 13px; }
+    #verdict { font-size: 44px; }
+  }
+</style>
+</head>
+<body>
+<div id="app">
+  <main id="stage">
+    <canvas id="view" width="640" height="480"></canvas>
+    <div id="wait">Starting camera…</div>
+  </main>
+
+  <aside>
+    <div class="card">
+      <p id="verdict">…</p>
+      <p id="verdictSub">The AI is looking for people.</p>
+      <div class="meter"><i id="bar"></i><b id="line"></b></div>
+      <div class="legend"><span>0%</span><span id="thr">seen above 25%</span><span>100%</span></div>
+    </div>
+
+    <div class="card">
+      <p class="eyebrow">Mode</p>
+      <div class="modes">
+        <button class="mode" data-mode="real"><kbd>1</kbd><b>Real world</b><span>Hold the printed patch on your chest</span></button>
+        <button class="mode" data-mode="digital"><kbd>2</kbd><b>Digital cloak</b><span>The computer pastes the patch on you</span></button>
+        <button class="mode" data-mode="control"><kbd>3</kbd><b>Control</b><span>Same colours, shuffled: does it still work?</span></button>
+      </div>
+    </div>
+
+    <div class="card">
+      <p class="eyebrow">The patches</p>
+      <div class="patches">
+        <figure><img src="patches/patch.png" alt="Adversarial patch"><figcaption>Trained to hide you</figcaption></figure>
+        <figure><img src="patches/control.png" alt="Shuffled control patch"><figcaption>Same pixels, shuffled</figcaption></figure>
+      </div>
+    </div>
+
+    <div class="card">
+      <p class="eyebrow">How does a picture hide you?</p>
+      <ol class="how">
+        <li>The AI (<b>YOLO</b>) finds people by adding up thousands of tiny visual clues: edges, textures, shapes.</li>
+        <li>We froze the AI and let a computer <b>redraw the patch</b> thousands of times, keeping each change that made the AI less sure it saw a person.</li>
+        <li>The result looks like nonsense to you, but it <b>drowns out the clues</b> the AI relies on.</li>
+      </ol>
+    </div>
+    <p id="keys">1 2 3 mode · ↑↓ threshold · f fullscreen</p>
+  </aside>
+</div>
+
+<script type="module">
+const $ = (s) => document.querySelector(s);
+const view = $("#view"), vctx = view.getContext("2d");
+const MAX_IN_FLIGHT = 2;
+
+let mode = "real", threshold = 0.25;
+
+// ---------------- camera ----------------
+const cam = document.createElement("video");
+cam.muted = true; cam.playsInline = true;
+const grab = document.createElement("canvas"), gctx = grab.getContext("2d");
+
+async function startCamera() {
+  cam.srcObject = await navigator.mediaDevices.getUserMedia({ video: { width: { ideal: 1280 }, height: { ideal: 720 } }, audio: false });
+  await cam.play();
+}
+
+async function capture() {
+  const w = 640, h = Math.round(640 * cam.videoHeight / cam.videoWidth);
+  if (grab.width !== w || grab.height !== h) { grab.width = w; grab.height = h; }
+  gctx.setTransform(-1, 0, 0, 1, w, 0);   // mirrored, so it feels like a mirror
+  gctx.drawImage(cam, 0, 0, w, h);
+  const bitmap = await createImageBitmap(grab);   // keep exactly the frame we sent
+  const blob = await new Promise((r) => grab.toBlob(r, "image/jpeg", 0.85));
+  return { bitmap, blob };
+}
+
+// ---------------- connection ----------------
+let ws, inFlight = 0;
+const sentFrames = [];   // frames waiting for their detections, oldest first
+let expectImage = null;  // detections waiting for their doctored frame (digital modes)
+
+function connect() {
+  ws = new WebSocket(`${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/ws`);
+  ws.binaryType = "arraybuffer";
+  ws.onopen = () => { inFlight = 0; sentFrames.length = 0; expectImage = null; ws.send(JSON.stringify({ mode })); pump(); };
+  ws.onmessage = async (e) => {
+    if (typeof e.data === "string") {
+      const r = JSON.parse(e.data);
+      const frame = sentFrames.shift();
+      if (r.image) { expectImage = { r, frame }; return; }
+      done(); draw(frame.bitmap, r.boxes); frame.bitmap.close();
+    } else if (expectImage) {
+      const { r, frame } = expectImage; expectImage = null;
+      done(); frame.bitmap.close();
+      const img = await createImageBitmap(new Blob([e.data], { type: "image/jpeg" }));
+      draw(img, r.boxes); img.close();
+    }
+  };
+  ws.onclose = () => { $("#wait").hidden = false; $("#wait").textContent = "Waiting for the detector… (is cloak/server.py running?)"; setTimeout(connect, 1500); };
+}
+
+function done() { inFlight = Math.max(0, inFlight - 1); pump(); }
+
+async function pump() {
+  while (ws?.readyState === 1 && inFlight < MAX_IN_FLIGHT && cam.videoWidth) {
+    inFlight++;
+    const f = await capture();
+    sentFrames.push(f);
+    ws.send(f.blob);
+  }
+}
+
+// ---------------- drawing ----------------
+function draw(img, boxes) {
+  $("#wait").hidden = true;
+  if (view.width !== img.width || view.height !== img.height) { view.width = img.width; view.height = img.height; }
+  vctx.drawImage(img, 0, 0);
+  let best = 0;
+  for (const [x1, y1, x2, y2, s] of boxes) {
+    best = Math.max(best, s);
+    const seen = s >= threshold;
+    vctx.lineWidth = seen ? 4 : 2;
+    vctx.setLineDash(seen ? [] : [8, 8]);
+    vctx.strokeStyle = seen ? "#ff4d5e" : "rgba(255,255,255,.35)";
+    vctx.strokeRect(x1, y1, x2 - x1, y2 - y1);
+    if (seen) {
+      const label = `person ${Math.round(s * 100)}%`;
+      vctx.font = "bold 20px system-ui, sans-serif";
+      const tw = vctx.measureText(label).width;
+      vctx.fillStyle = "#ff4d5e";
+      vctx.fillRect(x1 - 2, Math.max(0, y1 - 30), tw + 16, 30);
+      vctx.fillStyle = "#fff";
+      vctx.fillText(label, x1 + 6, Math.max(22, y1 - 8));
+    }
+  }
+  vctx.setLineDash([]);
+  verdict(best);
+}
+
+let lastSeen = 0;
+function verdict(best) {
+  // Hold "VISIBLE" for a moment so a single lucky frame doesn't flash "INVISIBLE".
+  const now = performance.now();
+  if (best >= threshold) lastSeen = now;
+  const seen = now - lastSeen < 400;
+  const v = $("#verdict");
+  v.textContent = seen ? "VISIBLE" : "INVISIBLE";
+  v.className = seen ? "seen" : "hidden";
+  $("#verdictSub").textContent = best >= threshold ? `The AI is ${Math.round(best * 100)}% sure it sees a person.`
+    : best > 0.05 ? `It only half-suspects someone is there (${Math.round(best * 100)}%).` : "The AI sees nobody at all.";
+  $("#bar").style.width = `${best * 100}%`;
+  $("#bar").style.background = best >= threshold ? "var(--seen)" : "var(--hidden)";
+}
+
+function setMode(m) {
+  mode = m;
+  document.querySelectorAll(".mode").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.mode === m)));
+  if (ws?.readyState === 1) ws.send(JSON.stringify({ mode }));
+}
+function setThreshold(t) {
+  threshold = Math.min(0.9, Math.max(0.05, Math.round(t * 100) / 100));
+  $("#line").style.left = `${threshold * 100}%`;
+  $("#thr").textContent = `seen above ${Math.round(threshold * 100)}%`;
+}
+
+document.querySelectorAll(".mode").forEach((b) => (b.onclick = () => setMode(b.dataset.mode)));
+addEventListener("keydown", (e) => {
+  if (e.key === "1") setMode("real");
+  else if (e.key === "2") setMode("digital");
+  else if (e.key === "3") setMode("control");
+  else if (e.key === "ArrowUp") setThreshold(threshold + 0.05);
+  else if (e.key === "ArrowDown") setThreshold(threshold - 0.05);
+  else if (e.key === "f") document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen();
+  else return;
+  e.preventDefault();
+});
+
+setMode("real"); setThreshold(0.25);
+try { await startCamera(); connect(); }
+catch (err) { $("#wait").textContent = `Camera unavailable: ${err.message}. Allow camera access and reload.`; }
+</script>
+</body>
+</html>
