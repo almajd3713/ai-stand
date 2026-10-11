@@ -81,10 +81,18 @@ wait_ready() {  # name, url, seconds
 
 open_url() {
     [ "${STAND_OPEN:-1}" = 0 ] && return
-    if command -v wslview >/dev/null; then wslview "$1"
-    elif command -v cmd.exe >/dev/null; then (cd /mnt/c 2>/dev/null; cmd.exe /c start "" "$1" >/dev/null 2>&1)
-    elif command -v xdg-open >/dev/null; then xdg-open "$1" >/dev/null 2>&1
-    elif command -v open >/dev/null; then open "$1"
+    local ok=1
+    if command -v wslview >/dev/null; then wslview "$1" >/dev/null 2>&1 || ok=0
+    elif command -v cmd.exe >/dev/null; then (cd /mnt/c 2>/dev/null; cmd.exe /c start "" "$1" >/dev/null 2>&1) || ok=0
+    elif command -v xdg-open >/dev/null; then xdg-open "$1" >/dev/null 2>&1 || ok=0
+    elif command -v open >/dev/null; then open "$1" || ok=0
+    else ok=0
+    fi
+    if [ "$ok" = 0 ]; then
+        echo "  ${yellow}couldn't open the browser from here: open the link above yourself${reset}"
+        if [ -d /proc/sys/fs/binfmt_misc ] && [ ! -e /proc/sys/fs/binfmt_misc/WSLInterop ] && [ ! -e /proc/sys/fs/binfmt_misc/WSLInterop-late ]; then
+            echo "  ${dim}(WSL can't start Windows programs right now. Fix: sudo sh -c 'echo :WSLInterop:M::MZ::/init:PF > /proc/sys/fs/binfmt_misc/register')${reset}"
+        fi
     fi
 }
 
