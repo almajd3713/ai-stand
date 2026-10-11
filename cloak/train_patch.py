@@ -1,6 +1,6 @@
 """Train an adversarial patch that makes YOLOv8n stop seeing people.
 
-    uv run python cloak/train_patch.py                  # ~5 minutes on an RTX 4070 Laptop
+    uv run python cloak/train_patch.py                  # ~20 minutes on an RTX 4070 Laptop
     uv run python cloak/train_patch.py --extra my_frames/   # also train on your own photos
 
 The patch is just a 300x300 image. Training pastes it onto every person in a set
@@ -110,7 +110,7 @@ def frame(img, boxes, close_up):
     oy, ox = (SIZE - nh) // 2, (SIZE - nw) // 2
     out[:, oy:oy + nh, ox:ox + nw] = F.interpolate(crop[None], size=(nh, nw), mode="bilinear", antialias=True)[0]
     b = b * s + torch.tensor([ox, oy, ox, oy], device=b.device)
-    return out, b
+    return out.clamp(0, 1), b  # resizing can overshoot 1.0, and YOLO then assumes 0-255
 
 
 # ---------------------------------------------------------------- the patch on a person
@@ -204,6 +204,10 @@ def main(args):
     test, train = samples[:30], samples[30:]
     print(f"{len(train)} training images, {len(test)} held out", flush=True)
 
+    if args.eval_only:
+        evaluate(detector, test, load_png(PATCHES / "patch.png", device), load_png(PATCHES / "control.png", device), device)
+        return
+
     patch = torch.full((3, 300, 300), 0.5, device=device).add_(torch.rand(3, 300, 300, device=device) * 0.2 - 0.1)
     patch.requires_grad_(True)
     opt = torch.optim.Adam([patch], lr=args.lr)
@@ -237,12 +241,20 @@ def main(args):
     control = flat[:, torch.randperm(flat.shape[1], device=device)].reshape(patch.shape)
     save(control, PATCHES / "control.png")
 
+    evaluate(detector, test, patch.detach(), control, device)
+
+
+def evaluate(detector, test, patch, control, device):
     print("\nperson recall on 30 held-out photos (lower = more invisible):")
     print(f"  {'':18s} {'normal print':>13s} {'bigger print':>13s}")
     grey = torch.full_like(patch, 0.5)
-    for name, p in [("no patch", None), ("grey square", grey), ("shuffled control", control), ("adversarial patch", patch.detach())]:
+    for name, p in [("no patch", None), ("grey square", grey), ("shuffled control", control), ("adversarial patch", patch)]:
         normal, big = (recall(detector, test, p, device, scale=k) for k in (0.35, 0.45))
         print(f"  {name:18s} {normal:13.0%} {big:13.0%}", flush=True)
+
+
+def load_png(path, device):
+    return torch.from_numpy(np.array(Image.open(path).convert("RGB"))).permute(2, 0, 1).float().div(255).to(device)
 
 
 def save(patch, path):
@@ -256,4 +268,5 @@ if __name__ == "__main__":
     ap.add_argument("--lr", type=float, default=0.03)
     ap.add_argument("--tv", type=float, default=1.0)
     ap.add_argument("--extra", help="folder of your own photos with people in them")
+    ap.add_argument("--eval-only", action="store_true", help="just measure the saved patches")
     main(ap.parse_args())

@@ -30,13 +30,24 @@ It runs on an ordinary laptop CPU. The first start downloads YOLOv8n (6 MB) into
 ## Training your own
 
 ```bash
-uv run python cloak/train_patch.py                    # ~5 minutes on an RTX 4070 Laptop
+uv run python cloak/train_patch.py                    # ~20 minutes on an RTX 4070 Laptop
 uv run python cloak/train_patch.py --extra photos/    # add your own photos of people
 ```
 
 Training downloads the Penn-Fudan pedestrian dataset (170 photos) into `cloak/data/`. It then optimizes the patch's pixels against the frozen detector. At the end it prints the share of people the detector still finds on 30 held-out photos with no patch, a grey square, the shuffled control, and the trained patch.
 
-**The patch works best when trained on photos that look like the stand.** Take 50–100 photos of club members at the venue (upper body, the real lighting, the real background), put them in a folder, and train with `--extra`. That is the single biggest improvement for the real-world mode.
+Results for the committed patch (6,000 steps, ~20 minutes), as the share of people YOLOv8n still finds on 30 held-out photos:
+
+| On the chest | Normal print | Bigger print (~30% larger) |
+|---|---|---|
+| Nothing | 100% | 100% |
+| Grey square | 99% | 85% |
+| Shuffled control | 99% | 94% |
+| **Adversarial patch** | **33%** | **5%** |
+
+So **print it big**: size matters more than anything else. To re-measure a patch without retraining, run `uv run python cloak/train_patch.py --eval-only`.
+
+**The patch works best when trained on photos that look like the stand.** It was trained on full-body street photos. On a close-up webcam portrait the digital cloak only just gets under the threshold. Take 50–100 photos of club members at the venue (upper body, the real lighting, the real background), put them in a folder, and train with `--extra`. That is the single biggest improvement for the real-world mode.
 
 ## Honest expectations
 
