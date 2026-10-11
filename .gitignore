@@ -1,0 +1,10 @@
+.venv/
+__pycache__/
+*.pyc
+*.safetensors
+*.pt
+*.onnx
+*.engine
+runs/
+data/
+.env

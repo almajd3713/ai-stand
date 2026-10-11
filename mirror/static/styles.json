@@ -1,0 +1,16 @@
+[
+  {"name": "Van Gogh", "prompt": "a portrait painted by vincent van gogh, thick swirling oil brushstrokes, vivid blue and yellow", "strength": 0.6},
+  {"name": "Anime", "prompt": "anime portrait, cel shading, clean line art, vibrant colors", "strength": 0.5},
+  {"name": "Zombie", "prompt": "a zombie portrait, horror movie makeup, pale grey rotting skin, dark cinematic lighting", "strength": 0.55},
+  {"name": "Marble statue", "prompt": "an ancient greek marble statue, white carved marble, museum lighting", "strength": 0.55},
+  {"name": "Astronaut", "prompt": "an astronaut in a white space suit, stars and nebula in the background, cinematic", "strength": 0.6},
+  {"name": "Cyberpunk", "prompt": "cyberpunk character, neon pink and cyan lights, futuristic city at night", "strength": 0.55},
+  {"name": "Animated movie", "prompt": "a 3d animated movie character, pixar style, big expressive eyes, soft lighting", "strength": 0.55},
+  {"name": "Stained glass", "prompt": "a stained glass window portrait, colorful glass pieces, thick black lead lines", "strength": 0.55},
+  {"name": "Persian miniature", "prompt": "a persian miniature painting, ornate patterns, gold leaf, flat colors", "strength": 0.6},
+  {"name": "Lego", "prompt": "a lego minifigure, shiny plastic toy, bright primary colors", "strength": 0.65},
+  {"name": "Watercolor", "prompt": "a delicate watercolor painting, soft washes of color, paper texture", "strength": 0.55},
+  {"name": "Pharaoh", "prompt": "an ancient egyptian pharaoh, golden headdress, egyptian tomb painting", "strength": 0.6},
+  {"name": "Claymation", "prompt": "a claymation character, plasticine, stop motion, handmade", "strength": 0.55},
+  {"name": "Viking", "prompt": "a viking warrior with a braided beard and horned helmet, fur cloak, epic fantasy painting", "strength": 0.6}
+]

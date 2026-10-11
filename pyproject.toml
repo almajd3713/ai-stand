@@ -1,0 +1,28 @@
+[project]
+name = "ai-stand"
+version = "0.1.0"
+description = "AI demos for the club stand: live mirror, jailbreak game, invisibility cloak, human-or-bot"
+requires-python = ">=3.12"
+dependencies = [
+    "torch>=2.14",
+    "torchvision>=0.29",
+    "diffusers>=0.35",
+    "transformers>=5.0",
+    "accelerate>=1.10",
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.30",
+    "pillow>=11",
+    "numpy>=2",
+]
+
+[tool.uv]
+package = false
+
+[[tool.uv.index]]
+name = "pytorch-cu130"
+url = "https://download.pytorch.org/whl/cu130"
+explicit = true
+
+[tool.uv.sources]
+torch = { index = "pytorch-cu130" }
+torchvision = { index = "pytorch-cu130" }

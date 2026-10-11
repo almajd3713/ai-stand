@@ -1,0 +1,321 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AI Mirror</title>
+<style>
+  :root {
+    --bg: #07080c;
+    --panel: #10121a;
+    --line: #222634;
+    --text: #e9ebf2;
+    --muted: #8a90a3;
+    --accent: #ffb547;
+    --accent-2: #6ee7d8;
+    --font: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    --mono: ui-monospace, "Cascadia Code", Consolas, monospace;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text); font-family: var(--font); overflow: hidden; }
+  body.hide-ui .side, body.hide-ui #chips, body.hide-ui #keys { opacity: 0; pointer-events: none; }
+  body.idle { cursor: none; }
+
+  #app {
+    height: 100vh;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr) auto;
+    gap: 0 2.5vw;
+    padding: 3vh 2.5vw 2vh;
+  }
+
+  /* --- the mirror itself --- */
+  #stage { grid-column: 2; grid-row: 1; position: relative; height: 100%; aspect-ratio: 1; max-width: 60vw; justify-self: center; }
+  #out { width: 100%; height: 100%; display: block; border-radius: 14px; background: #000; box-shadow: 0 0 0 1px var(--line), 0 30px 80px -20px rgba(0,0,0,.8); }
+  #title {
+    position: absolute; left: 50%; bottom: 4%; transform: translateX(-50%);
+    font-size: clamp(22px, 4.2vh, 56px); font-weight: 800; letter-spacing: -.02em; white-space: nowrap;
+    padding: .15em .6em; border-radius: 999px; background: rgba(7,8,12,.62); backdrop-filter: blur(8px);
+    transition: opacity .5s, transform .5s;
+  }
+  #title.swap { opacity: 0; transform: translateX(-50%) translateY(12px); }
+  #status {
+    position: absolute; inset: 0; display: grid; place-items: center; text-align: center;
+    color: var(--muted); font-size: 2.2vh; padding: 2em; border-radius: 14px;
+  }
+  #status[hidden] { display: none; }
+
+  /* --- side panels --- */
+  .side { display: flex; flex-direction: column; gap: 3vh; min-width: 0; transition: opacity .4s; padding-top: 1vh; }
+  .side.left { grid-column: 1; align-items: flex-end; text-align: right; }
+  .side.right { grid-column: 3; }
+  .eyebrow { font-size: 1.3vh; letter-spacing: .18em; text-transform: uppercase; color: var(--muted); margin: 0 0 .8vh; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 1.8vh 1.6vh; width: 100%; max-width: 30vh; }
+  .side.left .card { text-align: left; }
+
+  #cam { width: 100%; max-width: 30vh; aspect-ratio: 1; object-fit: cover; transform: scaleX(-1); border-radius: 12px; border: 1px solid var(--line); background: #000; display: block; }
+
+  .steps { margin: 0; padding: 0; list-style: none; counter-reset: s; display: grid; gap: 1.2vh; }
+  .steps li { counter-increment: s; display: grid; grid-template-columns: 2.6vh 1fr; gap: .9vh; font-size: 1.55vh; line-height: 1.35; color: #c9cdd9; }
+  .steps li::before {
+    content: counter(s); width: 2.6vh; height: 2.6vh; border-radius: 50%; display: grid; place-items: center;
+    background: #1b1f2b; color: var(--accent); font-weight: 700; font-size: 1.3vh;
+  }
+  .steps b { color: var(--text); }
+
+  #prompt { font-family: var(--mono); font-size: 1.45vh; line-height: 1.5; color: var(--accent-2); margin: 0; overflow-wrap: anywhere; }
+
+  .meter { height: 1vh; border-radius: 99px; background: #1b1f2b; overflow: hidden; margin: 1vh 0 .6vh; }
+  .meter > i { display: block; height: 100%; width: 50%; background: linear-gradient(90deg, var(--accent-2), var(--accent)); border-radius: inherit; transition: width .3s; }
+  .meter-legend { display: flex; justify-content: space-between; font-size: 1.2vh; color: var(--muted); }
+
+  .big { font-size: 5vh; font-weight: 800; letter-spacing: -.03em; font-variant-numeric: tabular-nums; line-height: 1; }
+  .big small { font-size: 1.6vh; font-weight: 500; color: var(--muted); letter-spacing: 0; margin-left: .4em; }
+  .note { font-size: 1.45vh; color: #c9cdd9; line-height: 1.4; margin: .8vh 0 0; }
+
+  /* --- style chips --- */
+  #chips { grid-column: 1 / -1; grid-row: 2; display: flex; flex-wrap: wrap; justify-content: center; gap: .8vh; padding-top: 2vh; transition: opacity .4s; }
+  .chip {
+    font: inherit; font-size: 1.6vh; color: var(--muted); background: var(--panel); border: 1px solid var(--line);
+    padding: .7vh 1.4vh; border-radius: 99px; cursor: pointer;
+  }
+  .chip:hover { color: var(--text); }
+  .chip[aria-pressed="true"] { color: #1a1205; background: var(--accent); border-color: var(--accent); font-weight: 700; }
+  .chip .k { font-family: var(--mono); opacity: .6; margin-right: .5em; font-size: .85em; }
+
+  #keys { position: fixed; right: 1.2vw; bottom: 1vh; font-size: 1.15vh; color: #4d5366; transition: opacity .4s; }
+  #keys kbd { font-family: var(--mono); color: var(--muted); }
+
+  /* --- custom prompt (operator only: press /) --- */
+  #custom { position: fixed; inset: 0; display: grid; place-items: center; background: rgba(0,0,0,.6); }
+  #custom[hidden] { display: none; }
+  #custom form { width: min(720px, 90vw); background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 20px; }
+  #custom input { width: 100%; font: inherit; font-size: 20px; padding: 12px 14px; border-radius: 10px; border: 1px solid var(--line); background: var(--bg); color: var(--text); }
+  #custom p { color: var(--muted); font-size: 13px; margin: 10px 2px 0; }
+
+  @media (max-aspect-ratio: 4/3) {
+    #app { grid-template-columns: 1fr; grid-template-rows: auto auto auto; overflow-y: auto; height: auto; min-height: 100vh; padding: 16px; gap: 16px; }
+    html, body { overflow: auto; }
+    #stage { grid-column: 1; grid-row: 1; height: auto; width: 100%; max-width: none; }
+    .side.left, .side.right { display: none; }
+    #chips { grid-row: 2; }
+  }
+</style>
+</head>
+<body>
+<div id="app">
+  <aside class="side left">
+    <div>
+      <p class="eyebrow">What the camera sees</p>
+      <video id="cam" muted playsinline></video>
+    </div>
+    <div class="card">
+      <p class="eyebrow">How every frame is made</p>
+      <ol class="steps">
+        <li><span><b>Compress</b> the camera frame into a tiny 64×64 “idea” of the image</span></li>
+        <li><span><b>Bury it in noise</b>, like TV static</span></li>
+        <li><span>A neural network <b>guesses what's under the noise</b>, steered by the text prompt</span></li>
+        <li><span><b>Expand</b> its guess back into a full picture</span></li>
+      </ol>
+    </div>
+  </aside>
+
+  <main id="stage">
+    <canvas id="out" width="512" height="512"></canvas>
+    <div id="title"></div>
+    <div id="status">Starting camera…</div>
+  </main>
+
+  <aside class="side right">
+    <div class="card">
+      <p class="eyebrow">The prompt it's following</p>
+      <p id="prompt"></p>
+    </div>
+    <div class="card">
+      <p class="eyebrow">Noise added</p>
+      <div class="meter"><i id="meter"></i></div>
+      <div class="meter-legend"><span>more you</span><span>more AI</span></div>
+    </div>
+    <div class="card">
+      <div class="big"><span id="fps">–</span><small>pictures / second</small></div>
+      <p class="note">None of this is a filter. Every single picture is painted from scratch by an AI, live, on a laptop.</p>
+    </div>
+  </aside>
+
+  <nav id="chips"></nav>
+</div>
+
+<div id="keys">
+  <kbd>←→</kbd> style · <kbd>↑↓</kbd> noise · <kbd>space</kbd> auto · <kbd>/</kbd> prompt · <kbd>z x</kbd> zoom · <kbd>c</kbd> camera · <kbd>h</kbd> hide
+</div>
+
+<div id="custom" hidden>
+  <form>
+    <input id="customText" autocomplete="off" placeholder="Describe a style… e.g. a knight in shining armour, oil painting">
+    <p>Enter to apply · Esc to cancel. Operator only: nothing filters what you type here.</p>
+  </form>
+</div>
+
+<script type="module">
+const $ = (s) => document.querySelector(s);
+const out = $("#out"), octx = out.getContext("2d");
+const cam = $("#cam"), status = $("#status");
+
+const STYLES = await (await fetch("styles.json")).json();
+const AUTO_EVERY = 20_000;      // attract mode: next style every 20 s
+const AUTO_RESUME = 60_000;     // after someone touches a control, wait this long before cycling again
+const MAX_IN_FLIGHT = 2;        // one frame on the GPU while the next one travels
+
+let style = { ...STYLES[0] }, styleIndex = 0;
+let zoom = 1;
+let auto = true, lastTouch = 0, lastSwitch = performance.now();
+
+// ---------------- styles ----------------
+const chips = $("#chips");
+STYLES.forEach((s, i) => {
+  const b = document.createElement("button");
+  b.className = "chip";
+  b.innerHTML = (i < 9 ? `<span class="k">${i + 1}</span>` : "") + s.name;
+  b.onclick = () => { touch(); pick(i); };
+  chips.append(b);
+});
+
+function pick(i) {
+  styleIndex = (i + STYLES.length) % STYLES.length;
+  setStyle({ ...STYLES[styleIndex] });
+}
+
+function setStyle(s) {
+  style = s;
+  [...chips.children].forEach((c, i) => c.setAttribute("aria-pressed", String(i === styleIndex && !s.custom)));
+  $("#prompt").textContent = s.prompt;
+  const title = $("#title");
+  title.classList.add("swap");
+  setTimeout(() => { title.textContent = s.name; title.classList.remove("swap"); }, 250);
+  lastSwitch = performance.now();
+  sendSettings();
+}
+
+function setStrength(v) {
+  style.strength = Math.min(0.9, Math.max(0.2, Math.round(v * 100) / 100));
+  sendSettings();
+}
+
+function sendSettings() {
+  $("#meter").style.width = `${style.strength * 100}%`;
+  if (ws?.readyState === 1) ws.send(JSON.stringify({ prompt: style.prompt, strength: style.strength }));
+}
+
+function touch() { lastTouch = performance.now(); }
+
+setInterval(() => {
+  const now = performance.now();
+  if (auto && now - lastTouch > AUTO_RESUME && now - lastSwitch > AUTO_EVERY) pick(styleIndex + 1);
+}, 1000);
+
+// ---------------- camera ----------------
+let cameras = [], cameraIndex = 0;
+
+async function startCamera() {
+  cam.srcObject?.getTracks().forEach((t) => t.stop());
+  const video = { width: { ideal: 1280 }, height: { ideal: 720 } };
+  if (cameras[cameraIndex]) video.deviceId = { exact: cameras[cameraIndex].deviceId };
+  cam.srcObject = await navigator.mediaDevices.getUserMedia({ video, audio: false });
+  await cam.play();
+  cameras = (await navigator.mediaDevices.enumerateDevices()).filter((d) => d.kind === "videoinput");
+}
+
+const grab = document.createElement("canvas");
+grab.width = grab.height = 512;
+const gctx = grab.getContext("2d");
+
+function capture() {
+  const vw = cam.videoWidth, vh = cam.videoHeight;
+  const side = Math.min(vw, vh) / zoom;
+  gctx.setTransform(-1, 0, 0, 1, 512, 0);  // mirror it, so moving left moves left
+  gctx.drawImage(cam, (vw - side) / 2, (vh - side) / 2, side, side, 0, 0, 512, 512);
+  return new Promise((resolve) => grab.toBlob(resolve, "image/jpeg", 0.85));
+}
+
+// ---------------- connection ----------------
+let ws, inFlight = 0, frames = 0;
+
+function connect() {
+  ws = new WebSocket(`${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/ws`);
+  ws.binaryType = "arraybuffer";
+  ws.onopen = () => { inFlight = 0; sendSettings(); pump(); };
+  ws.onmessage = async (e) => {
+    inFlight = Math.max(0, inFlight - 1);
+    pump();
+    const bitmap = await createImageBitmap(new Blob([e.data], { type: "image/jpeg" }));
+    octx.drawImage(bitmap, 0, 0, 512, 512);
+    bitmap.close();
+    frames++;
+    status.hidden = true;
+  };
+  ws.onclose = () => {
+    status.hidden = false;
+    status.textContent = "Waiting for the AI server… (is mirror/server.py running?)";
+    setTimeout(connect, 1500);
+  };
+}
+
+async function pump() {
+  while (ws?.readyState === 1 && inFlight < MAX_IN_FLIGHT && cam.videoWidth) {
+    inFlight++;
+    ws.send(await capture());
+  }
+}
+
+setInterval(() => { $("#fps").textContent = frames; frames = 0; }, 1000);
+
+// ---------------- keys ----------------
+const custom = $("#custom"), customText = $("#customText");
+
+addEventListener("keydown", (e) => {
+  if (!custom.hidden) { if (e.key === "Escape") custom.hidden = true; return; }
+  touch();
+  const k = e.key;
+  if (k === "ArrowRight") pick(styleIndex + 1);
+  else if (k === "ArrowLeft") pick(styleIndex - 1);
+  else if (k === "ArrowUp") setStrength(style.strength + 0.05);
+  else if (k === "ArrowDown") setStrength(style.strength - 0.05);
+  else if (k >= "1" && k <= "9") pick(Number(k) - 1);
+  else if (k === " ") { auto = !auto; lastTouch = 0; }
+  else if (k === "z") zoom = Math.min(3, zoom * 1.1);
+  else if (k === "x") zoom = Math.max(1, zoom / 1.1);
+  else if (k === "h") document.body.classList.toggle("hide-ui");
+  else if (k === "f") document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen();
+  else if (k === "c" && cameras.length > 1) { cameraIndex = (cameraIndex + 1) % cameras.length; startCamera(); }
+  else if (k === "/") { e.preventDefault(); custom.hidden = false; customText.value = ""; customText.focus(); }
+  else return;
+  e.preventDefault();
+});
+
+custom.querySelector("form").onsubmit = (e) => {
+  e.preventDefault();
+  const text = customText.value.trim();
+  custom.hidden = true;
+  if (text) setStyle({ name: text.length > 28 ? text.slice(0, 26) + "…" : text, prompt: text, strength: 0.6, custom: true });
+};
+
+let idleTimer;
+addEventListener("mousemove", () => {
+  document.body.classList.remove("idle");
+  clearTimeout(idleTimer);
+  idleTimer = setTimeout(() => document.body.classList.add("idle"), 3000);
+});
+
+// ---------------- go ----------------
+setStyle(style);
+try {
+  await startCamera();
+  status.textContent = "Connecting to the AI…";
+  connect();
+} catch (err) {
+  status.textContent = `Camera unavailable: ${err.message}. Allow camera access and reload.`;
+}
+</script>
+</body>
+</html>
