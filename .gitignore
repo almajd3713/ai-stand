@@ -9,3 +9,4 @@ runs/
 data/
 .env
 mirror/styles.local.json
+.run/

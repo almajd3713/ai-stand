@@ -23,6 +23,17 @@ The chat games need a local LLM server, which on the day is the Mac running Olla
 
 See each demo's folder for how to run it.
 
+### Trying them all on one machine
+
+```bash
+./stand.sh          # menu: pick a demo; the others (and the LLM, when not needed) are stopped
+./stand.sh jailbreak   # or mirror, cloak, turing
+./stand.sh status
+./stand.sh stop
+```
+
+The chat games start a local `llama-server` while they run. Set `LLAMA_SERVER` in `.env` if it isn't on your PATH. If a demo's usual port is taken, the script picks a free one and says which.
+
 ## On the day
 
 | Machine | Runs | Command |
