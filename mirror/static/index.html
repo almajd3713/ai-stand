@@ -8,11 +8,13 @@
   :root {
     --bg: #07080c;
     --panel: #10121a;
+    --panel-2: #161925;
     --line: #222634;
     --text: #e9ebf2;
     --muted: #8a90a3;
     --accent: #ffb547;
     --accent-2: #6ee7d8;
+    --danger: #ff6b6b;
     --font: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
     --mono: ui-monospace, "Cascadia Code", Consolas, monospace;
   }
@@ -36,6 +38,7 @@
   #title {
     position: absolute; left: 50%; bottom: 4%; transform: translateX(-50%);
     font-size: clamp(22px, 4.2vh, 56px); font-weight: 800; letter-spacing: -.02em; white-space: nowrap;
+    max-width: 92%; overflow: hidden; text-overflow: ellipsis;
     padding: .15em .6em; border-radius: 999px; background: rgba(7,8,12,.62); backdrop-filter: blur(8px);
     transition: opacity .5s, transform .5s;
   }
@@ -87,12 +90,53 @@
   #keys { position: fixed; right: 1.2vw; bottom: 1vh; font-size: 1.15vh; color: #4d5366; transition: opacity .4s; }
   #keys kbd { font-family: var(--mono); color: var(--muted); }
 
-  /* --- custom prompt (operator only: press /) --- */
-  #custom { position: fixed; inset: 0; display: grid; place-items: center; background: rgba(0,0,0,.6); }
-  #custom[hidden] { display: none; }
-  #custom form { width: min(720px, 90vw); background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 20px; }
-  #custom input { width: 100%; font: inherit; font-size: 20px; padding: 12px 14px; border-radius: 10px; border: 1px solid var(--line); background: var(--bg); color: var(--text); }
-  #custom p { color: var(--muted); font-size: 13px; margin: 10px 2px 0; }
+  /* --- style studio (operator drawer: press e) --- */
+  #studio {
+    position: fixed; top: 0; right: 0; bottom: 0; width: min(420px, 100vw); z-index: 10;
+    background: var(--panel); border-left: 1px solid var(--line); box-shadow: -30px 0 80px rgba(0,0,0,.5);
+    display: flex; flex-direction: column; gap: 16px; padding: 22px; overflow-y: auto;
+    transform: translateX(105%); transition: transform .3s ease;
+    font-size: 14px;
+  }
+  #studio.open { transform: none; }
+  #studio header { display: flex; align-items: center; justify-content: space-between; }
+  #studio h2 { margin: 0; font-size: 18px; }
+  #studio label { display: grid; gap: 6px; color: var(--muted); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; }
+  #studio input[type=text], #studio textarea {
+    font: inherit; font-size: 15px; text-transform: none; letter-spacing: 0; color: var(--text);
+    background: var(--bg); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; width: 100%;
+  }
+  #studio textarea { min-height: 110px; resize: vertical; font-family: var(--mono); font-size: 14px; line-height: 1.5; color: var(--accent-2); }
+  #studio input:focus, #studio textarea:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+  #studio textarea.blocked { outline: 2px solid var(--danger); }
+  .hint { margin: -8px 0 0; font-size: 12px; color: var(--muted); }
+  .hint.warn { color: var(--danger); }
+  .slider-row { display: flex; align-items: center; gap: 12px; text-transform: none; letter-spacing: 0; }
+  .slider-row input { flex: 1; accent-color: var(--accent); }
+  .slider-row output { font-family: var(--mono); color: var(--text); width: 3.5em; text-align: right; font-size: 14px; }
+  .row { display: flex; flex-wrap: wrap; gap: 8px; }
+  .btn {
+    font: inherit; font-size: 13px; color: var(--text); background: var(--panel-2); border: 1px solid var(--line);
+    padding: 8px 12px; border-radius: 9px; cursor: pointer;
+  }
+  .btn:hover { border-color: var(--muted); }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: #1a1205; font-weight: 700; }
+  .btn.danger { color: var(--danger); }
+  .btn:disabled { opacity: .4; cursor: default; }
+  .icon-btn { font: inherit; font-size: 20px; line-height: 1; background: none; border: 0; color: var(--muted); cursor: pointer; padding: 4px 8px; }
+  #studioList { display: grid; gap: 4px; max-height: 32vh; overflow-y: auto; }
+  #studioList button {
+    font: inherit; font-size: 13px; text-align: left; color: var(--muted); background: none; border: 1px solid transparent;
+    border-radius: 8px; padding: 6px 10px; cursor: pointer; display: flex; justify-content: space-between; gap: 8px;
+  }
+  #studioList button:hover { color: var(--text); background: var(--panel-2); }
+  #studioList button.current { color: var(--text); border-color: var(--line); background: var(--panel-2); }
+  #studioList span:last-child { font-family: var(--mono); font-size: 12px; opacity: .7; }
+  #toast {
+    position: fixed; left: 50%; top: 2vh; transform: translate(-50%, -150%); z-index: 20; transition: transform .3s;
+    background: var(--panel-2); border: 1px solid var(--line); padding: 10px 16px; border-radius: 10px; font-size: 14px;
+  }
+  #toast.show { transform: translate(-50%, 0); }
 
   @media (max-aspect-ratio: 4/3) {
     #app { grid-template-columns: 1fr; grid-template-rows: auto auto auto; overflow-y: auto; height: auto; min-height: 100vh; padding: 16px; gap: 16px; }
@@ -147,72 +191,216 @@
 </div>
 
 <div id="keys">
-  <kbd>←→</kbd> style · <kbd>↑↓</kbd> noise · <kbd>space</kbd> auto · <kbd>/</kbd> prompt · <kbd>z x</kbd> zoom · <kbd>c</kbd> camera · <kbd>h</kbd> hide
+  <kbd>e</kbd> studio · <kbd>←→</kbd> style · <kbd>↑↓</kbd> noise · <kbd>space</kbd> auto · <kbd>z x</kbd> zoom · <kbd>c</kbd> camera · <kbd>h</kbd> hide · <kbd>f</kbd> fullscreen
 </div>
 
-<div id="custom" hidden>
-  <form>
-    <input id="customText" autocomplete="off" placeholder="Describe a style… e.g. a knight in shining armour, oil painting">
-    <p>Enter to apply · Esc to cancel. Operator only: nothing filters what you type here.</p>
-  </form>
-</div>
+<aside id="studio" aria-label="Style studio">
+  <header>
+    <h2>Style studio</h2>
+    <button class="icon-btn" id="studioClose" title="Close (Esc)">×</button>
+  </header>
+
+  <label>Prompt
+    <textarea id="sPrompt" spellcheck="false" placeholder="a knight in shining armour, oil painting"></textarea>
+  </label>
+  <p class="hint" id="sHint">The mirror follows as you type.</p>
+
+  <label>Noise
+    <span class="slider-row">
+      <input type="range" id="sStrength" min="0.2" max="0.9" step="0.01">
+      <output id="sStrengthOut"></output>
+    </span>
+  </label>
+  <p class="hint">Around 0.5 keeps you recognisable. Above 0.65 the AI takes over.</p>
+
+  <label>Name
+    <input type="text" id="sName" maxlength="40" placeholder="Knight">
+  </label>
+
+  <div class="row">
+    <button class="btn primary" id="sUpdate">Save changes</button>
+    <button class="btn" id="sAdd">Save as new style</button>
+    <button class="btn danger" id="sDelete">Delete</button>
+  </div>
+  <div class="row">
+    <button class="btn" id="sReseed" title="Same style, different random noise">Re-roll the noise</button>
+    <button class="btn" id="sRevert">Undo unsaved edits</button>
+  </div>
+
+  <label>Styles</label>
+  <div id="studioList"></div>
+  <div class="row">
+    <button class="btn danger" id="sReset">Reset all styles to the defaults</button>
+  </div>
+</aside>
+
+<div id="toast"></div>
 
 <script type="module">
 const $ = (s) => document.querySelector(s);
 const out = $("#out"), octx = out.getContext("2d");
 const cam = $("#cam"), status = $("#status");
 
-const STYLES = await (await fetch("styles.json")).json();
 const AUTO_EVERY = 20_000;      // attract mode: next style every 20 s
 const AUTO_RESUME = 60_000;     // after someone touches a control, wait this long before cycling again
 const MAX_IN_FLIGHT = 2;        // one frame on the GPU while the next one travels
 
-let style = { ...STYLES[0] }, styleIndex = 0;
+let styles = [];                // the saved list (server-side)
+let styleIndex = 0;             // which saved style is selected, -1 = an unsaved one
+let style = null;               // what the mirror is showing right now (may have unsaved edits)
 let zoom = 1;
 let auto = true, lastTouch = 0, lastSwitch = performance.now();
 
 // ---------------- styles ----------------
 const chips = $("#chips");
-STYLES.forEach((s, i) => {
-  const b = document.createElement("button");
-  b.className = "chip";
-  b.innerHTML = (i < 9 ? `<span class="k">${i + 1}</span>` : "") + s.name;
-  b.onclick = () => { touch(); pick(i); };
-  chips.append(b);
-});
 
-function pick(i) {
-  styleIndex = (i + STYLES.length) % STYLES.length;
-  setStyle({ ...STYLES[styleIndex] });
+async function api(method, body) {
+  const res = await fetch("api/styles", {
+    method, headers: { "content-type": "application/json" }, body: body && JSON.stringify(body),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.detail ?? res.statusText);
+  return data.styles;
 }
 
-function setStyle(s) {
+function renderChips() {
+  chips.replaceChildren(...styles.map((s, i) => {
+    const b = document.createElement("button");
+    b.className = "chip";
+    b.innerHTML = (i < 9 ? `<span class="k">${i + 1}</span>` : "") + escapeHtml(s.name);
+    b.setAttribute("aria-pressed", String(i === styleIndex));
+    b.onclick = () => { touch(); pick(i); };
+    return b;
+  }));
+  renderStudioList();
+}
+
+function pick(i) {
+  if (!styles.length) return;
+  styleIndex = (i + styles.length) % styles.length;
+  show({ ...styles[styleIndex] });
+}
+
+function show(s, { quiet = false } = {}) {
   style = s;
-  [...chips.children].forEach((c, i) => c.setAttribute("aria-pressed", String(i === styleIndex && !s.custom)));
+  [...chips.children].forEach((c, i) => c.setAttribute("aria-pressed", String(i === styleIndex)));
   $("#prompt").textContent = s.prompt;
   const title = $("#title");
-  title.classList.add("swap");
-  setTimeout(() => { title.textContent = s.name; title.classList.remove("swap"); }, 250);
+  if (quiet) title.textContent = s.name;
+  else {
+    title.classList.add("swap");
+    setTimeout(() => { title.textContent = style.name; title.classList.remove("swap"); }, 250);
+  }
   lastSwitch = performance.now();
-  sendSettings();
+  send();
+  if (studioOpen()) fillStudio();
+}
+
+function send(extra = {}) {
+  $("#meter").style.width = `${style.strength * 100}%`;
+  if (ws?.readyState === 1) ws.send(JSON.stringify({ prompt: style.prompt, strength: style.strength, ...extra }));
 }
 
 function setStrength(v) {
   style.strength = Math.min(0.9, Math.max(0.2, Math.round(v * 100) / 100));
-  sendSettings();
-}
-
-function sendSettings() {
-  $("#meter").style.width = `${style.strength * 100}%`;
-  if (ws?.readyState === 1) ws.send(JSON.stringify({ prompt: style.prompt, strength: style.strength }));
+  send();
+  if (studioOpen()) fillStudio();
 }
 
 function touch() { lastTouch = performance.now(); }
 
 setInterval(() => {
   const now = performance.now();
-  if (auto && now - lastTouch > AUTO_RESUME && now - lastSwitch > AUTO_EVERY) pick(styleIndex + 1);
+  if (auto && !studioOpen() && now - lastTouch > AUTO_RESUME && now - lastSwitch > AUTO_EVERY) pick(styleIndex + 1);
 }, 1000);
+
+// ---------------- style studio ----------------
+const studio = $("#studio");
+const sPrompt = $("#sPrompt"), sName = $("#sName"), sStrength = $("#sStrength"), sHint = $("#sHint");
+const studioOpen = () => studio.classList.contains("open");
+
+function openStudio(focusPrompt) {
+  studio.classList.add("open");
+  fillStudio();
+  if (focusPrompt) { sPrompt.focus(); sPrompt.select(); }
+}
+function closeStudio() { studio.classList.remove("open"); document.activeElement?.blur(); }
+
+function fillStudio() {
+  if (document.activeElement !== sPrompt) sPrompt.value = style.prompt;
+  if (document.activeElement !== sName) sName.value = style.name;
+  sStrength.value = style.strength;
+  $("#sStrengthOut").textContent = style.strength.toFixed(2);
+  $("#sUpdate").disabled = styleIndex < 0;
+  $("#sDelete").disabled = styleIndex < 0 || styles.length < 2;
+  renderStudioList();
+}
+
+function renderStudioList() {
+  $("#studioList").replaceChildren(...styles.map((s, i) => {
+    const b = document.createElement("button");
+    b.className = i === styleIndex ? "current" : "";
+    b.innerHTML = `<span>${escapeHtml(s.name)}</span><span>${s.strength.toFixed(2)}</span>`;
+    b.onclick = () => pick(i);
+    return b;
+  }));
+}
+
+let typing;
+sPrompt.addEventListener("input", () => {
+  clearTimeout(typing);
+  typing = setTimeout(() => {           // live, but not on every single keystroke
+    const text = sPrompt.value.trim();
+    if (!text) return;
+    style.prompt = text;
+    $("#prompt").textContent = text;
+    sPrompt.classList.remove("blocked");
+    sHint.className = "hint"; sHint.textContent = "The mirror follows as you type.";
+    send();
+  }, 120);
+});
+sName.addEventListener("input", () => { style.name = sName.value.trim() || "Untitled"; $("#title").textContent = style.name; });
+sStrength.addEventListener("input", () => setStrength(Number(sStrength.value)));
+
+$("#sUpdate").onclick = () => save(async () => {
+  const next = styles.slice(); next[styleIndex] = clean(style); return next;
+}, "Saved");
+$("#sAdd").onclick = () => save(async () => {
+  styleIndex = styles.length; return [...styles, clean(style)];
+}, "Added as a new style");
+$("#sDelete").onclick = () => {
+  if (!confirm(`Delete “${styles[styleIndex].name}”?`)) return;
+  const gone = styleIndex;
+  save(async () => { styleIndex = Math.max(0, gone - 1); return styles.filter((_, i) => i !== gone); }, "Deleted", true);
+};
+$("#sReset").onclick = async () => {
+  if (!confirm("Throw away every saved change and go back to the built-in styles?")) return;
+  try { styles = await api("DELETE"); styleIndex = 0; renderChips(); pick(0); toast("Back to the defaults"); }
+  catch (err) { toast(err.message); }
+};
+$("#sRevert").onclick = () => { if (styleIndex >= 0) pick(styleIndex); };
+$("#sReseed").onclick = () => send({ reseed: Math.floor(Math.random() * 2 ** 31) });
+$("#studioClose").onclick = closeStudio;
+
+function clean(s) { return { name: s.name.trim() || "Untitled", prompt: s.prompt.trim(), strength: s.strength }; }
+
+async function save(makeList, message, reshow) {
+  try {
+    styles = await api("PUT", await makeList());
+    renderChips();
+    if (reshow) pick(styleIndex); else { [...chips.children].forEach((c, i) => c.setAttribute("aria-pressed", String(i === styleIndex))); fillStudio(); }
+    toast(message);
+  } catch (err) { toast(err.message); }
+}
+
+let toastTimer;
+function toast(text) {
+  const t = $("#toast");
+  t.textContent = text; t.classList.add("show");
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove("show"), 2200);
+}
+
+function escapeHtml(s) { return s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]); }
 
 // ---------------- camera ----------------
 let cameras = [], cameraIndex = 0;
@@ -244,8 +432,15 @@ let ws, inFlight = 0, frames = 0;
 function connect() {
   ws = new WebSocket(`${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/ws`);
   ws.binaryType = "arraybuffer";
-  ws.onopen = () => { inFlight = 0; sendSettings(); pump(); };
+  ws.onopen = () => { inFlight = 0; send(); pump(); };
   ws.onmessage = async (e) => {
+    if (typeof e.data === "string") {
+      if (JSON.parse(e.data).blocked) {
+        sPrompt.classList.add("blocked");
+        sHint.className = "hint warn"; sHint.textContent = "That prompt has a blocked word, so the mirror kept the last one.";
+      }
+      return;
+    }
     inFlight = Math.max(0, inFlight - 1);
     pump();
     const bitmap = await createImageBitmap(new Blob([e.data], { type: "image/jpeg" }));
@@ -271,10 +466,9 @@ async function pump() {
 setInterval(() => { $("#fps").textContent = frames; frames = 0; }, 1000);
 
 // ---------------- keys ----------------
-const custom = $("#custom"), customText = $("#customText");
-
 addEventListener("keydown", (e) => {
-  if (!custom.hidden) { if (e.key === "Escape") custom.hidden = true; return; }
+  if (e.key === "Escape" && studioOpen()) { closeStudio(); return; }
+  if (e.target.matches("input[type=text], textarea")) return;   // typing in the studio
   touch();
   const k = e.key;
   if (k === "ArrowRight") pick(styleIndex + 1);
@@ -282,23 +476,17 @@ addEventListener("keydown", (e) => {
   else if (k === "ArrowUp") setStrength(style.strength + 0.05);
   else if (k === "ArrowDown") setStrength(style.strength - 0.05);
   else if (k >= "1" && k <= "9") pick(Number(k) - 1);
-  else if (k === " ") { auto = !auto; lastTouch = 0; }
+  else if (k === " ") { auto = !auto; lastTouch = 0; toast(auto ? "Attract mode on" : "Attract mode off"); }
+  else if (k === "e") studioOpen() ? closeStudio() : openStudio(false);
+  else if (k === "/") openStudio(true);
   else if (k === "z") zoom = Math.min(3, zoom * 1.1);
   else if (k === "x") zoom = Math.max(1, zoom / 1.1);
   else if (k === "h") document.body.classList.toggle("hide-ui");
   else if (k === "f") document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen();
   else if (k === "c" && cameras.length > 1) { cameraIndex = (cameraIndex + 1) % cameras.length; startCamera(); }
-  else if (k === "/") { e.preventDefault(); custom.hidden = false; customText.value = ""; customText.focus(); }
   else return;
   e.preventDefault();
 });
-
-custom.querySelector("form").onsubmit = (e) => {
-  e.preventDefault();
-  const text = customText.value.trim();
-  custom.hidden = true;
-  if (text) setStyle({ name: text.length > 28 ? text.slice(0, 26) + "…" : text, prompt: text, strength: 0.6, custom: true });
-};
 
 let idleTimer;
 addEventListener("mousemove", () => {
@@ -308,7 +496,9 @@ addEventListener("mousemove", () => {
 });
 
 // ---------------- go ----------------
-setStyle(style);
+styles = await api("GET");
+renderChips();
+pick(0);
 try {
   await startCamera();
   status.textContent = "Connecting to the AI…";

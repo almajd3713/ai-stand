@@ -52,6 +52,13 @@ class Mirror:
         self._step = torch.compile(self._step, mode="max-autotune") if compile else self._step
 
     @torch.inference_mode()
+    def reseed(self, seed):
+        """New noise for every frame from now on: same style, a different take on it.
+        Copied in place, so the compiled CUDA graph keeps reading the same memory."""
+        g = torch.Generator(self.device).manual_seed(seed)
+        self.noise.copy_(torch.randn(self.noise.shape, generator=g, device=self.device, dtype=self.dtype))
+
+    @torch.inference_mode()
     def embed(self, prompt):
         if prompt not in self._embeds:
             ids = self.tokenizer(

@@ -22,16 +22,29 @@ uv run python mirror/selftest.py some_photo.jpg --save out.jpg
 
 | Key | Does |
 |---|---|
+| `e` | Open the **Style Studio** (below) |
+| `/` | Open the studio with the prompt box selected, ready to type |
 | `←` `→` or `1`–`9` | Change style |
 | `↑` `↓` | More / less noise (less of you, more AI) |
 | `space` | Toggle attract mode (changes style every 20 s; pauses for a minute after anyone presses a key) |
-| `/` | Type a custom style. **Operator only:** nothing filters the prompt |
 | `z` `x` | Zoom the camera in / out |
 | `c` | Next camera |
 | `h` | Hide the side panels |
 | `f` | Fullscreen |
 
-Styles live in [`static/styles.json`](static/styles.json). Each style has a prompt and a `strength`, which sets how much noise is added. Around 0.5 keeps the person recognisable. Above 0.65 the model starts replacing them.
+### Style Studio
+
+Press `e` to open a drawer where you can:
+
+- **Type a prompt** and watch the mirror follow as you type.
+- **Drag the noise slider.** Around 0.5 keeps the person recognisable. Above 0.65 the model starts replacing them.
+- **Save changes** to the selected style, **save it as a new style**, or **delete** it. Saved styles show up as buttons along the bottom.
+- **Re-roll the noise:** same prompt, a different random take on it.
+- **Reset** everything back to the built-in styles.
+
+The built-in styles are in [`static/styles.json`](static/styles.json). Studio edits go to `mirror/styles.local.json`, which is kept out of git and takes over from the built-in list once it exists.
+
+Prompts containing words from the small blocklist in [`server.py`](server.py) (`BLOCKED`) are ignored, and the studio tells you so. Extend the list for your audience. It catches the obvious stuff, not everything, so a club member should stay with the keyboard.
 
 ## How it works
 
