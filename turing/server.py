@@ -30,7 +30,7 @@ from personas import humanize, language_hint, new_persona, typing_seconds  # noq
 
 HERE = pathlib.Path(__file__).parent
 STATS = HERE / "data" / "stats.json"
-ROUND_SECONDS = 180
+IDLE_END = 600          # a round with no messages for this long was abandoned: end it
 MAX_MESSAGE = 300
 
 judges: set[WebSocket] = set()      # visitor screens (normally one)
@@ -69,9 +69,10 @@ async def start_round():
     global round_
     human = random.choice("AB")
     round_ = {"id": uuid.uuid4().hex, "human": human, "bot": "B" if human == "A" else "A",
-              "persona": new_persona(), "history": [], "started": time.time(), "ended": False}
-    await send(judges, type="round", seconds=ROUND_SECONDS)
-    await send(humans, type="round", side=human, seconds=ROUND_SECONDS)
+              "persona": new_persona(), "history": [], "started": time.time(), "active": time.time(),
+              "ended": False}
+    await send(judges, type="round")
+    await send(humans, type="round", side=human)
 
 
 async def bot_reply(rnd, question):
@@ -104,6 +105,7 @@ async def visitor_says(to, text):
     rnd = round_
     if not rnd or rnd["ended"] or to not in "AB" or not text:
         return
+    rnd["active"] = time.time()
     if to == rnd["human"]:
         await send(humans, type="msg", who="visitor", text=text)
     else:
@@ -138,7 +140,7 @@ async def end_round(pick):
 async def heartbeat():
     while True:
         await asyncio.sleep(10)
-        if round_ and time.time() - round_["started"] > ROUND_SECONDS + 120:
+        if round_ and time.time() - round_["active"] > IDLE_END:
             await end_round(None)  # abandoned
         await status()
 
@@ -185,13 +187,14 @@ async def human_ws(ws: WebSocket):
     humans.add(ws)
     await status()
     if round_:
-        await send({ws}, type="round", side=round_["human"], seconds=ROUND_SECONDS)
+        await send({ws}, type="round", side=round_["human"])
     try:
         while True:
             m = json.loads(await ws.receive_text())
             if not round_ or round_["ended"]:
                 continue
             if m["type"] == "say" and (text := str(m.get("text", "")).strip()[:MAX_MESSAGE]):
+                round_["active"] = time.time()
                 await send(judges, type="msg", who=round_["human"], text=text)
                 await send(judges, type="typing", who=round_["human"], on=False)
             elif m["type"] == "typing":

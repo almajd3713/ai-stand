@@ -49,7 +49,6 @@
   .bar h2 { margin: 0; font-size: 20px; }
   .bar .hint { color: var(--muted); font-size: 14px; }
   #timer { font-family: var(--mono); font-size: 26px; font-variant-numeric: tabular-nums; }
-  #timer.low { color: var(--bad); }
   .vote { display: flex; gap: 10px; }
   .vote .btn { font-weight: 700; }
   .vote .va { color: var(--a); border-color: color-mix(in srgb, var(--a) 50%, transparent); }
@@ -103,7 +102,7 @@
 <section id="start" class="screen on">
   <div>
     <h1><span class="h">Human</span> or <span class="b">Bot?</span></h1>
-    <p class="pitch">You'll chat with two strangers at the same time. One is a real person, somewhere in this room. The other is an AI pretending to be a student. You have three minutes to work out which is which.</p>
+    <p class="pitch">You'll chat with two strangers at the same time. One is a real person, somewhere in this room. The other is an AI pretending to be a student. Chat as long as you like, then pick the human whenever you're ready.</p>
     <button class="btn go" id="startBtn">Start chatting</button>
     <p id="startNote"></p>
     <div class="scoreline">
@@ -116,10 +115,10 @@
 <section id="round" class="screen">
   <div class="card bar">
     <div><h2>Which one is the human?</h2><span class="hint">Chat with both. Ask anything.</span></div>
-    <span id="timer">3:00</span>
+    <span id="timer" title="How long this round has been going">0:00</span>
     <div class="vote">
-      <button class="btn va" data-pick="A" disabled>A is the human</button>
-      <button class="btn vb" data-pick="B" disabled>B is the human</button>
+      <button class="btn va" data-pick="A">A is the human</button>
+      <button class="btn vb" data-pick="B">B is the human</button>
     </div>
   </div>
   <div class="panes">
@@ -167,9 +166,8 @@
 
 <script type="module">
 const $ = (s, el = document) => el.querySelector(s);
-const MIN_MESSAGES = 3;   // messages the visitor must send before voting
 
-let ws, sent = 0, deadline = 0, tick, state = {};
+let ws, started = 0, tick, state = {};
 
 function show(id) { document.querySelectorAll(".screen").forEach((s) => s.classList.toggle("on", s.id === id)); }
 function toast(text) { const t = $("#toast"); t.textContent = text; t.classList.add("on"); setTimeout(() => t.classList.remove("on"), 3500); }
@@ -192,7 +190,7 @@ function handle(m) {
     $("#startNote").textContent = !m.llm ? "The AI server isn't answering. Ask a club member."
       : !m.human ? "Waiting for the human player to get ready…" : "";
   } else if (m.type === "round") {
-    begin(m.seconds);
+    begin();
   } else if (m.type === "msg") {
     add(m.who, "them", m.text);
   } else if (m.type === "typing") {
@@ -204,32 +202,24 @@ function handle(m) {
   }
 }
 
-function begin(seconds) {
-  sent = 0;
+function begin() {
   for (const who of "AB") {
     $(".log", pane(who)).innerHTML = "";
     $(".typing", pane(who)).innerHTML = "";
     $("input", pane(who)).value = "";
   }
-  document.querySelectorAll(".vote .btn").forEach((b) => (b.disabled = true));
-  deadline = Date.now() + seconds * 1000;
+  started = Date.now();
   clearInterval(tick);
-  tick = setInterval(countdown, 250);
-  countdown();
+  tick = setInterval(elapsed, 500);
+  elapsed();
   show("round");
   $("input", pane("A")).focus();
 }
 
-function countdown() {
-  const left = Math.max(0, Math.round((deadline - Date.now()) / 1000));
-  $("#timer").textContent = `${Math.floor(left / 60)}:${String(left % 60).padStart(2, "0")}`;
-  $("#timer").classList.toggle("low", left <= 20);
-  if (left === 0) {
-    clearInterval(tick);
-    document.querySelectorAll(".vote .btn").forEach((b) => (b.disabled = false));
-    for (const who of "AB") $("input", pane(who)).disabled = true;
-    toast("Time's up! Who was the human?");
-  }
+// Counts up: the club decides when a round ends, not a clock.
+function elapsed() {
+  const s = Math.floor((Date.now() - started) / 1000);
+  $("#timer").textContent = `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
 }
 
 function add(who, kind, text) {
@@ -252,7 +242,6 @@ for (const who of "AB") {
     tell({ type: "say", to: who, text });
     tell({ type: "typing", to: who, on: false }); typingOn = false;
     input.value = "";
-    if (++sent >= MIN_MESSAGES) document.querySelectorAll(".vote .btn").forEach((b) => (b.disabled = false));
   };
   input.addEventListener("input", () => {   // the human player sees you typing, like a real chat
     if (!typingOn) { typingOn = true; tell({ type: "typing", to: who, on: true }); }
@@ -268,7 +257,6 @@ document.querySelectorAll(".vote .btn").forEach((b) => (b.onclick = () => tell({
 
 function reveal(m) {
   clearInterval(tick);
-  for (const who of "AB") $("input", pane(who)).disabled = false;
   const v = $("#rVerdict");
   if (m.correct === null) { v.textContent = "Round ended"; v.className = "verdict"; }
   else { v.textContent = m.correct ? "You got it!" : "The AI fooled you!"; v.className = `verdict ${m.correct ? "good" : "bad"}`; }

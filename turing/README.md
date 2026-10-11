@@ -1,6 +1,6 @@
 # Human or Bot?
 
-A Turing test. A visitor chats with two strangers at once for three minutes, then guesses which one is the human. One stranger is a club member typing on another laptop. The other is the local LLM playing a student. Sides are shuffled every round, and the start screen shows how often visitors get fooled.
+A Turing test. A visitor chats with two strangers at once, then guesses which one is the human. There's no time limit: the visitor can vote whenever they like, and the club decides when a round should end. A timer counting up shows how long the round has been going. One stranger is a club member typing on another laptop. The other is the local LLM playing a student. Sides are shuffled every round, and the start screen shows how often visitors get fooled.
 
 ## Run it
 
@@ -20,7 +20,7 @@ uv run python turing/server.py
 
   `./stand.sh turing` prints the exact address for the other PC. Both PCs must be on the same network. Some university and café Wi-Fi networks block device-to-device traffic. If it still can't connect, use your own router or a phone hotspot.
 
-The visitor can't start a round until the human player's page is open.
+The visitor can't start a round until the human player's page is open. A round with no messages for 10 minutes ends by itself.
 
 ## How the bot passes for human
 
