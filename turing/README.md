@@ -13,7 +13,12 @@ uv run python turing/server.py
 - **Visitor screen:** http://localhost:8767 on the stand laptop.
 - **Human player:** `http://<stand laptop's IP>:8767/human.html` on a club member's laptop, out of the visitor's sight. Find the IP with `ipconfig` (Windows) or `ip addr`. The server listens on all interfaces so the other laptop can reach it. Allow it through the firewall if Windows asks.
 
-  If the server runs inside WSL, other machines can't reach it directly. Either run it on another laptop, or turn on WSL's mirrored networking (`networkingMode=mirrored` in `%UserProfile%\.wslconfig`).
+  **If the server runs inside WSL**, two things are needed:
+
+  1. Mirrored networking, so WSL shares the PC's IP address: `networkingMode=mirrored` under `[wsl2]` in `%UserProfile%\.wslconfig`, then `wsl --shutdown`.
+  2. A firewall opening. WSL's Hyper-V firewall blocks all incoming connections by default. Run `./stand.sh firewall` once and approve the Windows admin prompt. It opens port 8767 only. `./stand.sh firewall close` removes the rule. The script behind it is [`tools/open-ports.ps1`](../tools/open-ports.ps1).
+
+  `./stand.sh turing` prints the exact address for the other PC. Both PCs must be on the same network. Some university and café Wi-Fi networks block device-to-device traffic. If it still can't connect, use your own router or a phone hotspot.
 
 The visitor can't start a round until the human player's page is open.
 

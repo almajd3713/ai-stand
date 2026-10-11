@@ -7,6 +7,7 @@
 #   ./stand.sh stop                  stop everything this script started
 #   ./stand.sh status
 #   ./stand.sh logs <demo|llm>       follow a log
+#   ./stand.sh firewall [close]      let other PCs reach Human or Bot (WSL; asks for admin)
 #
 # The chat games need an LLM. By default this starts llama.cpp's llama-server
 # locally (set LLAMA_SERVER and LLM_GGUF in .env if they aren't found). To use
@@ -96,6 +97,26 @@ open_url() {
     fi
 }
 
+lan_ip() {  # this machine's address on the local network (WSL mirrored mode shares the PC's)
+    ip route get 1.1.1.1 2>/dev/null | awk '{for (i = 1; i < NF; i++) if ($i == "src") { print $(i + 1); exit }}'
+}
+
+firewall() {  # open (or close) the Human or Bot port in the Windows and Hyper-V firewalls
+    command -v powershell.exe >/dev/null || { echo "  only needed on Windows/WSL"; return 1; }
+    local dir=/mnt/c/Users/Public ports="${PORT[turing]}" flag=""
+    [ "${1:-}" = close ] && flag="-Remove"
+    cp tools/open-ports.ps1 "$dir/ai-stand-open-ports.ps1"
+    printf '& "$PSScriptRoot\\ai-stand-open-ports.ps1" -Ports %s %s\nRead-Host "Done. Press Enter to close"\n' "$ports" "$flag" >"$dir/ai-stand-firewall.ps1"
+    echo "  ${bold}Approve the Windows admin prompt${reset} (it only touches port $ports)…"
+    (cd /mnt/c && powershell.exe -NoProfile -Command "Start-Process powershell -Verb RunAs -Wait -ArgumentList '-NoProfile -ExecutionPolicy Bypass -File C:\Users\Public\ai-stand-firewall.ps1'") \
+        || { echo "  ${red}cancelled or failed${reset}"; return 1; }
+    local n
+    n=$(cd /mnt/c && powershell.exe -NoProfile -Command "(Get-NetFirewallHyperVRule -Name 'AI Stand $ports' -ErrorAction SilentlyContinue | Measure-Object).Count" | tr -d '\r')
+    if [ -z "$flag" ] && [ "$n" = 1 ]; then echo "  ${green}port $ports is open${reset}: other PCs can use http://$(lan_ip):$ports/human.html"
+    elif [ -n "$flag" ] && [ "$n" = 0 ]; then echo "  ${green}port $ports is closed again${reset}"
+    else echo "  ${red}the rule didn't change${reset}"; fi
+}
+
 # ---------------------------------------------------------------- the LLM
 
 start_llm() {
@@ -147,7 +168,8 @@ launch() {
     echo "  open ${bold}$url${reset}"
     open_url "$url"
     if [ "$demo" = turing ]; then
-        echo "  human player: ${bold}${url}human.html${reset} (a second window is fine for testing)"
+        echo "  human player, this PC:    ${bold}${url}human.html${reset}"
+        echo "  human player, another PC: ${bold}http://$(lan_ip):$port/human.html${reset}  ${dim}(can't connect? ./stand.sh firewall)${reset}"
         open_url "${url}human.html"
     fi
     [ "$demo" = jailbreak ] && grep -m1 "Passwords" "$RUN/jailbreak.log" | sed "s/^/  ${dim}/; s/\$/${reset}/"
@@ -180,5 +202,6 @@ case "${1:-menu}" in
     stop) stop_all ;;
     status) status ;;
     logs) tail -n 50 -f "$RUN/${2:-llm}.log" ;;
+    firewall) firewall "${2:-open}" ;;
     *) launch "$1" ;;
 esac
