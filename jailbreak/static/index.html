@@ -45,6 +45,11 @@
   #nameForm { display: flex; gap: 10px; max-width: 520px; }
   #nameForm .field { font-size: 20px; }
   #nameForm .btn { font-size: 18px; padding: 0 24px; }
+  .welcome { max-width: 520px; background: var(--panel); border: 1px solid var(--accent); border-radius: 14px; padding: 18px 20px; }
+  .welcome[hidden] { display: none; }
+  .welcome p { margin: 0 0 14px; font-size: 18px; line-height: 1.45; }
+  .welcome p small { display: block; color: var(--muted); font-size: 14px; margin-top: 4px; }
+  .welcome .row { display: flex; gap: 10px; }
   #llmWarn { color: var(--warn); margin-top: 14px; font-size: 14px; display: none; }
   .board { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
   .board td { padding: 9px 6px; border-top: 1px solid var(--line); }
@@ -131,12 +136,19 @@
 <section id="start" class="screen on">
   <div>
     <h1>Jailbreak<br>the <em>Guardian</em></h1>
-    <p class="pitch">Six AI guardians each protect a secret password. Each one is defended better than the last. Talk them into giving it up, with tricks, lies, stories or charm. Fewest messages wins.</p>
+    <p class="pitch">Six AI guardians each protect a secret password. Each one is defended better than the last. Talk them into giving it up, with tricks, lies, stories or charm. Fewest messages wins. Come back any time and type the same name to carry on.</p>
     <div class="ladder-mini" id="ladderMini"></div>
     <form id="nameForm">
       <input class="field" id="nameIn" maxlength="20" placeholder="Your name" autocomplete="off" required>
       <button class="btn go">Start</button>
     </form>
+    <div class="welcome" id="welcome" hidden>
+      <p id="welcomeText"></p>
+      <div class="row">
+        <button class="btn go" id="resumeBtn">Continue</button>
+        <button class="btn" id="notMeBtn">That's not me</button>
+      </div>
+    </div>
     <p id="llmWarn">The AI server isn't answering. Ask a club member to check it.</p>
   </div>
   <div class="card">
@@ -260,17 +272,55 @@ $("#nameForm").onsubmit = async (e) => {
   if (!name) return;
   try {
     const r = await api("start", { name });
-    session = r.session; level = 1; msgs = 0; wrong = 0; started = Date.now();
-    $("#playerName").textContent = name;
-    enterLevel();
-    show("game");
-    $("#sayIn").focus();
+    if (r.existing) welcomeBack(r.existing); else begin(r);
   } catch (err) { alert(err.message); }
 };
+
+// Someone typed a name we know: make sure it's really them before resuming.
+function welcomeBack(p) {
+  const L = levels[p.level - 1];
+  $("#welcomeText").innerHTML = p.finished
+    ? `<b>${esc(p.name)}</b> already beat all six guardians!<small>If that's not you, pick a different name, like adding your last initial.</small>`
+    : `Welcome back, <b>${esc(p.name)}</b>! You're on level ${p.level} of 6 against ${esc(L.guardian)}, with ${p.messages} messages so far.<small>Not you? Pick a different name, like adding your last initial.</small>`;
+  $("#resumeBtn").hidden = p.finished;
+  $("#nameForm").hidden = true;
+  $("#welcome").hidden = false;
+  (p.finished ? $("#notMeBtn") : $("#resumeBtn")).focus();
+}
+
+$("#resumeBtn").onclick = async () => {
+  try { begin(await api("start", { name: $("#nameIn").value.trim(), resume: true }), true); }
+  catch (err) { alert(err.message); }
+};
+$("#notMeBtn").onclick = () => {
+  $("#welcome").hidden = true;
+  $("#nameForm").hidden = false;
+  $("#nameIn").select();
+};
+
+function begin(r, resumed = false) {
+  session = r.session; level = r.level; msgs = r.messages; wrong = r.wrong;
+  started = Date.now() - r.seconds * 1000;
+  lastAct = Date.now();
+  $("#playerName").textContent = r.name;
+  $("#welcome").hidden = true; $("#nameForm").hidden = false;
+  enterLevel();
+  if (resumed) {
+    add("sys info", "Welcome back! Here's where you left off.");
+    for (const m of r.history) {
+      if (m.role === "user") add("me", m.content);
+      else if (m.content === "(I can't say that.)") add("sys output", "A filter removed this reply.");
+      else add("ai", m.content);
+    }
+  }
+  show("game");
+  $("#sayIn").focus();
+}
 
 function resetToStart() {
   session = null;
   $("#cleared").classList.remove("on");
+  $("#welcome").hidden = true; $("#nameForm").hidden = false;
   $("#nameIn").value = "";
   loadBoard(); checkLLM();
   show("start");
@@ -337,7 +387,7 @@ $("#say").onsubmit = async (e) => {
   } catch (err) {
     typing.remove();
     add("sys error", err.message);
-    if (/session/.test(err.message)) setTimeout(resetToStart, 2500);
+    if (/session/.test(err.message)) setTimeout(resetToStart, 3500);
   }
   busy = false; $("#sayBtn").disabled = false; $("#sayIn").focus();
   if (msgs % 6 === 0) $("#tip").textContent = TIPS[(msgs / 6 + level) % TIPS.length];

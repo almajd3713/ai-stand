@@ -34,9 +34,12 @@ Levels 2–5 use the same one-line instruction, so the only thing that changes b
 
 ## Operating it
 
-- **New player** (top left during a game) returns to the start screen. Abandoned games reset by themselves after 3 minutes.
-- **Shift+click** a leaderboard row to remove it (for rude names).
-- The leaderboard lives in `jailbreak/data/leaderboard.json` (gitignored). Delete the file to start fresh.
+- **Players are their names.** Typing the same name again (case and spacing don't matter) asks "Welcome back, … level 3. Continue?" and resumes the level, message count and current conversation, even after a server restart. "That's not me" asks for a different name, so two visitors called Ahmed don't share a game.
+- The leaderboard time counts **active play only**: a pause of more than 2 minutes between actions isn't counted, so coming back later doesn't cost anything.
+- **New player** (top left during a game) returns to the start screen. Abandoned games go back to it after 3 minutes, and the player can resume by name.
+- **Shift+click** a leaderboard row to remove that player (for rude names). This also deletes their saved progress.
+- Progress and the leaderboard live in `jailbreak/data/players.json` and `leaderboard.json` (gitignored). Delete both to start fresh.
+- If the passwords in `.env` are blank, new random ones are picked at every restart. Returning players keep their level, but the password for it changes. Set them in `.env` for the day.
 - If the start screen says the AI server isn't answering, check the Mac and `LLM_URL`.
 
 ## Tuning

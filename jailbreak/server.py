@@ -23,11 +23,11 @@ from levels import BLOCKED_INPUT, DEFENSES, JUDGE_PROMPT, LEVELS, passwords  # n
 
 HERE = pathlib.Path(__file__).parent
 BOARD = HERE / "data" / "leaderboard.json"
+PLAYERS = HERE / "data" / "players.json"
 PASSWORDS = passwords()
 HISTORY_TURNS = 10      # exchanges per level the guardian remembers
 MAX_MESSAGE = 400       # characters
-
-sessions = {}
+IDLE_CAP = 120          # seconds: a longer pause between actions doesn't count as playing time
 
 
 def letters(text):
@@ -56,6 +56,39 @@ async def judge(reply, pw):
     return "LEAK" in verdict.upper()
 
 
+# ---------------------------------------------------------------- players
+# A player is their name: typing the same name again resumes their game,
+# even after the server restarts.
+
+def player_key(name):
+    return re.sub(r"\s+", " ", name).strip().casefold()
+
+
+def load_players():
+    try:
+        return json.loads(PLAYERS.read_text())
+    except (FileNotFoundError, json.JSONDecodeError):
+        return {}
+
+
+def save_players():
+    PLAYERS.parent.mkdir(exist_ok=True)
+    tmp = PLAYERS.with_suffix(".tmp")
+    tmp.write_text(json.dumps(players, ensure_ascii=False))
+    tmp.replace(PLAYERS)
+
+
+def played(p):
+    """Add the time since the player's last action, but not long breaks."""
+    now = time.time()
+    p["seconds"] += min(now - p["last"], IDLE_CAP)
+    p["last"] = now
+
+
+players = load_players()   # player key -> progress
+sessions = {}              # session token -> player key
+
+
 def load_board():
     try:
         return json.loads(BOARD.read_text())
@@ -76,7 +109,7 @@ def record(s):
     """Put this player's best run on the leaderboard; return their rank (1-based)."""
     board = [e for e in load_board() if e["id"] != s["id"]]
     entry = {"id": s["id"], "name": s["name"], "levels": s["level"] - 1, "messages": s["messages"],
-             "guesses": s["wrong_guesses"], "seconds": round(time.time() - s["started"])}
+             "guesses": s["wrong_guesses"], "seconds": round(s["seconds"])}
     board.append(entry)
     board.sort(key=rank_key)
     save_board(board)
@@ -90,9 +123,9 @@ def public_levels():
 
 
 def get_session(sid):
-    if sid not in sessions:
-        raise HTTPException(404, "session expired, start again")
-    return sessions[sid]
+    if sessions.get(sid) not in players:
+        raise HTTPException(404, "session expired, type your name again to continue")
+    return players[sessions[sid]]
 
 
 app = FastAPI()
@@ -115,20 +148,33 @@ def leaderboard():
 
 @app.delete("/api/leaderboard/{entry_id}")
 def remove_entry(entry_id: str):
+    """Operator: remove a player (rude names happen), from the board and from saved progress."""
     save_board([e for e in load_board() if e["id"] != entry_id])
+    if players.pop(entry_id, None):
+        save_players()
     return {"ok": True}
 
 
 @app.post("/api/start")
-def start(name: str = Body(..., embed=True)):
+def start(name: str = Body(...), resume: bool = Body(False)):
+    """A new name starts a game. A known name first gets asked "is this you?", then resumes."""
     name = re.sub(r"\s+", " ", name).strip()[:20] or "Anonymous"
+    key = player_key(name)
+    p = players.get(key)
+    if p and not resume:
+        return {"existing": {"name": p["name"], "level": p["level"], "messages": p["messages"],
+                             "finished": p["level"] > len(LEVELS)}}
+    if p and p["level"] > len(LEVELS):
+        raise HTTPException(400, "this player already beat every guardian")
+    if not p:
+        p = players[key] = {"id": key, "name": name, "level": 1, "history": [], "messages": 0,
+                            "wrong_guesses": 0, "seconds": 0.0, "last": time.time()}
+    p["last"] = time.time()  # the break since their last visit doesn't count
+    save_players()
     sid = uuid.uuid4().hex
-    sessions[sid] = {"id": sid, "name": name, "level": 1, "history": [], "messages": 0,
-                     "wrong_guesses": 0, "started": time.time()}
-    if len(sessions) > 500:  # forget the oldest players
-        for old in sorted(sessions, key=lambda k: sessions[k]["started"])[:100]:
-            sessions.pop(old)
-    return {"session": sid, "level": 1}
+    sessions[sid] = key
+    return {"session": sid, "name": p["name"], "level": p["level"], "messages": p["messages"],
+            "wrong": p["wrong_guesses"], "seconds": round(p["seconds"]), "history": p["history"]}
 
 
 @app.post("/api/chat")
@@ -141,8 +187,10 @@ async def chat(session: str = Body(...), text: str = Body(...)):
         raise HTTPException(400, "empty message")
     lvl, pw = LEVELS[s["level"] - 1], PASSWORDS[s["level"] - 1]
     s["messages"] += 1
+    played(s)
 
     if "input_filter" in lvl["defenses"] and (word := blocked_input(text)):
+        save_players()
         return {"blocked": "input", "note": f"Your message never reached {lvl['guardian']}: "
                                             f"the input filter blocks the word “{word}”."}
 
@@ -165,6 +213,8 @@ async def chat(session: str = Body(...), text: str = Body(...)):
     # The guardian remembers what it said, unless a filter removed it.
     s["history"] += [{"role": "user", "content": text},
                      {"role": "assistant", "content": "(I can't say that.)" if blocked else reply}]
+    s["history"] = s["history"][-2 * HISTORY_TURNS:]
+    save_players()
     if blocked:
         return {"blocked": blocked, "note": note}
     return {"reply": reply}
@@ -176,11 +226,14 @@ def guess(session: str = Body(...), password: str = Body(...)):
     if s["level"] > len(LEVELS):
         raise HTTPException(400, "you already beat every level")
     lvl = LEVELS[s["level"] - 1]
+    played(s)
     if letters(password) != letters(PASSWORDS[s["level"] - 1]):
         s["wrong_guesses"] += 1
+        save_players()
         return {"correct": False}
     s["level"] += 1
     s["history"] = []
+    save_players()
     rank = record(s)
     return {"correct": True, "lesson": lvl["lesson"], "cleared": s["level"] - 1,
             "finished": s["level"] > len(LEVELS), "rank": rank}
